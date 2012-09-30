@@ -1,0 +1,158 @@
+<?xml version="1.0" ?>
+<resource class="wxStdDialogButtonSizer">
+  <object class="wxDialog" name="asn_dlg">
+    <object class="wxBoxSizer">
+      <object class="sizeritem">
+        <object class="wxFlexGridSizer">
+          <object class="sizeritem">
+            <object class="wxStaticBoxSizer">
+              <object class="sizeritem">
+                <object class="wxFlexGridSizer">
+                  <object class="sizeritem">
+                    <option>0</option>
+                    <flag>wxALIGN_CENTER_VERTICAL|wxALL</flag>
+                    <border>5</border>
+                    <object class="wxStaticText" name="m_staticText1">
+                      <label>ASN.1 Specification</label>
+                      <wrap>-1</wrap>
+                    </object>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxTextCtrl" name="File">
+                      <size>180,-1</size>
+                      <maxlength>0</maxlength>
+                    </object>
+                    <option>0</option>
+                    <flag>wxALL</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <option>0</option>
+                    <flag>wxALL</flag>
+                    <border>5</border>
+                    <object class="wxButton" name="Browse">
+                      <label>Browse...</label>
+                      <default>0</default>
+                    </object>
+                  </object>
+                  <object class="sizeritem">
+                    <option>0</option>
+                    <flag>wxALIGN_CENTER_VERTICAL|wxALL</flag>
+                    <border>5</border>
+                    <object class="wxStaticText" name="m_staticText2">
+                      <label>Version</label>
+                      <wrap>-1</wrap>
+                    </object>
+                  </object>
+                  <object class="sizeritem">
+                    <option>0</option>
+                    <flag>wxALL</flag>
+                    <border>5</border>
+                    <object class="wxTextCtrl" name="Version">
+                      <value/>
+                      <maxlength>0</maxlength>
+                    </object>
+                  </object>
+                  <object class="spacer">
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <border>5</border>
+                    <size>0,0</size>
+                  </object>
+                  <object class="sizeritem">
+                    <option>0</option>
+                    <flag>wxALIGN_CENTER_VERTICAL|wxALL</flag>
+                    <border>5</border>
+                    <object class="wxStaticText" name="m_staticText3">
+                      <tooltip>For use in Specification selection list</tooltip>
+                      <label>Title</label>
+                      <wrap>-1</wrap>
+                    </object>
+                  </object>
+                  <object class="sizeritem">
+                    <option>0</option>
+                    <flag>wxALL</flag>
+                    <border>5</border>
+                    <object class="wxTextCtrl" name="Title">
+                      <value/>
+                      <maxlength>0</maxlength>
+                    </object>
+                  </object>
+                  <object class="spacer">
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <border>5</border>
+                    <size>0,0</size>
+                  </object>
+                  <cols>3</cols>
+                  <rows>3</rows>
+                  <vgap>0</vgap>
+                  <hgap>0</hgap>
+                  <growablecols/>
+                  <growablerows/>
+                </object>
+                <option>1</option>
+                <flag>wxALL|wxEXPAND</flag>
+                <border>5</border>
+              </object>
+              <label>ASN.1 Specification Details</label>
+              <orient>wxVERTICAL</orient>
+            </object>
+            <option>2</option>
+            <flag>wxALL|wxEXPAND</flag>
+            <border>5</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxRadioBox" name="Encoding">
+              <label>Encoding Rule</label>
+              <dimension>3</dimension>
+              <content>
+                <item>ber</item>
+                <item>der</item>
+                <item>per</item>
+              </content>
+              <selection>0</selection>
+              <dimension>3</dimension>
+              <style>wxBORDER_NONE|wxRA_SPECIFY_COLS</style>
+            </object>
+            <option>1</option>
+            <flag>wxALL|wxEXPAND|wxALIGN_CENTRE_VERTICAL|wxALIGN_CENTRE_HORIZONTAL</flag>
+            <border>5</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxStdDialogButtonSizer">
+              <object class="button">
+                <flag>wxALIGN_CENTER_HORIZONTAL|wxALL</flag>
+                <border>5</border>
+                <object class="wxButton" name="wxID_OK">
+                  <label>&amp;OK</label>
+                </object>
+              </object>
+              <object class="button">
+                <flag>wxALIGN_CENTER_HORIZONTAL|wxALL</flag>
+                <border>5</border>
+                <object class="wxButton" name="wxID_CANCEL">
+                  <label>&amp;Cancel</label>
+                </object>
+              </object>
+            </object>
+            <option>1</option>
+            <flag>wxALL|wxEXPAND|wxGROW</flag>
+            <border>5</border>
+          </object>
+          <cols>1</cols>
+          <rows>3</rows>
+          <hgap>5</hgap>
+        </object>
+        <option>1</option>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>10</border>
+      </object>
+      <orient>wxVERTICAL</orient>
+    </object>
+    <size>428,370</size>
+    <title>Select ASN.1 specification</title>
+    <centered>1</centered>
+    <style>wxDEFAULT_DIALOG_STYLE</style>
+  </object>
+</resource>
