@@ -17,8 +17,8 @@ Caveats
 =======
 This is the very first release of my ASN.1 viewer/editor. Not much is working yet
 
-Gui is working, but not everything is connected yet. 
-Code for asn.1 pretty print is working (some issues with indenting still), 
-Code for xml pretty print works. 
-Hexview works, but selection is not yet working (need to implement multiple selection, know how to do this, just not done yet).
-Editing is not yet working
+- Gui is working, but not everything is connected yet.   
+- Code for asn.1 pretty print is working (some issues with indenting still),  
+- Code for xml pretty print works.   
+- Hexview works, but selection is not yet working (need to implement multiple selection, know how to do this, just not done yet).  
+- Editing is not yet working  
