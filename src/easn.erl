@@ -62,8 +62,7 @@ view([FN, ASN_spec, Version]) ->
 	case filelib:is_regular(ASN_spec) of
 	  true -> 
 	  	%% Compile ASN.1 Spec, get module name and root of ASN.1 spec
-		Spec = compile(#asn{file=ASN_spec,version=Version}, standard_io),
-		self() ! {parse, self(), [], {FN, Spec}},
+		self() ! {compile, self, FN, #asn{file=ASN_spec,version=Version}},
 		loop();
 	  false ->
 		io:fwrite("~s does not exist~n",[ASN_spec])
@@ -84,11 +83,25 @@ loop() ->
 		From ! {parse_done, ReplyAs, Reply},
 		loop();
 	{compile, From, ReplyAs, Asn} ->
-		Reply = compile(Asn, From),
+		Reply = compile(Asn, From, ReplyAs),
 		From ! {compile_done, ReplyAs, Reply},
 		loop();
-	{close, _From, _ReplyAs} ->
+	{close} ->
 		ok;
+	%% Handle parse adn compile result for CLI version
+	{status, _Reply, Msg} ->
+		io:format("~s",[Msg]),
+		loop();
+	{compile_done, FN, Spec} ->
+		self() ! {parse, self(), [], {FN, Spec}},
+		loop();
+	{parse_result, _Data, Asn, _Xml} ->
+		io:format("~s",[Asn]),
+		loop();
+	{parse_done, _Reply, Msg} ->
+		io:format("~s",[Msg]),
+		ok;
+	%% Unknown commands
 	Msg ->
 	    io:format("Got ~p ~n", [Msg]),
 	    loop()
@@ -108,22 +121,22 @@ parse(FN, Spec, From, State) ->
 		%% Parse File
 		{ok, Bytes} = file:read_file(FN),
 		From ! {hex, State, to_hex(Bytes,0,[])},
-		parse_asn(Spec, 1, Bytes, {From, State});								
+		parse_asn(Spec, 1, Bytes, From, State);								
 	  false ->
-		{error, io_lib:format("~s does not exist",[FN])}
+		From ! {error, State, io_lib:format("~s does not exist",[FN])}
 	end.
 
 %%
 %% Compile asn. specification if not already done so.
 %%
 %% ASN_spec - asn.1 specification file name
-compile(Asn, Dev) ->
+compile(Asn, Dev, ReplyAs) ->
 	ASN_spec = Asn#asn.file,
 	%% Extract specification filename without path & extension
     Ext = filename:extension(ASN_spec),							%% Get Extension
     Base = filename:basename(ASN_spec,Ext),						%% Get filename without extension
 	Dir = filename:dirname(code:which(?MODULE)),
-	io:fwrite(Dev, "~nCompiling asn.1 specification: ~s~n",[ASN_spec]),
+	Dev ! {status, ReplyAs, io_lib:format("~nCompiling asn.1 specification: ~s~n",[ASN_spec])},
 	%% Check if specification alrady compiled
 	case checkASN(Asn#asn.file, Asn#asn.version) of				%% Check if already compiled version exists
 	true -> 
@@ -131,10 +144,9 @@ compile(Asn, Dev) ->
 	false -> 
 		ok = asn1ct:compile(ASN_spec,[ber,undec_rest]),			%% Compile asn.1 specification
 		DBFile = filename:join([Dir, lists:concat([Base, ".asn1db"])]),
-		{ok, DB} = ets:file2tab(DBFile),							%% Read DB
-		io:fwrite(Dev, "  Root tag: ",[]),
+		{ok, DB} = ets:file2tab(DBFile),						%% Read DB
 		Tag = get_root(DB),										%% Determine 'root' tag
-		io:fwrite(Dev, "~p~n",[Tag]),
+		Dev ! {status, ReplyAs, io_lib:format("Root: ~s~n",[Tag])},
 		S = #asn_spec{db=DB, mod=list_to_atom(Base), root=Tag},
 		storeASN(Asn#asn{spec=S}),
 		S
@@ -173,32 +185,32 @@ get_root(DB, Key, Root, Tag) ->
 %% Count - piece counter
 %% Bytes - binary data to be decoded 
 %%
-parse_asn(_, _, <<>>, _) -> ok;								%% Done with parsing
-parse_asn(Spec, Count, <<H,T/binary>>, Dev) when H==0 -> 	%% Skip filler bytes
-	parse_asn(Spec, Count, T, Dev); 
-parse_asn(Spec, Count, Bytes, Dev) when is_binary(Bytes) ->	%% Parse ASN.1 file
+parse_asn(_, _, <<>>, _, _) -> ok;									%% Done with parsing
+parse_asn(Spec, Count, <<H,T/binary>>, Dev, ReplyAs) when H==0 -> 		%% Skip filler bytes
+	parse_asn(Spec, Count, T, Dev, ReplyAs); 
+parse_asn(Spec, Count, Bytes, Dev, ReplyAs) when is_binary(Bytes) ->		%% Parse ASN.1 file
 	Mod = Spec#asn_spec.mod,
 	case Mod:decode(Spec#asn_spec.root, Bytes) of
-		{ok, Dec, T} ->									%% Decoded data
-			io:format("~n~n-- CDR #~p~n",[Count]),
+		{ok, Dec, T} ->											%% Decoded data
+			Dev ! {status, ReplyAs, io_lib:format("~n~n<!-- CDR #~p -->~n",[Count])},
 			%Data = tuple_to_list(Dec),		%% Get data
 			Asn = to_asn(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db),	%% Human readable printout
 			Xml = to_xml(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db), 
 			{From, State} = Dev,
-			From ! {parse_result, State, {Dec, Asn, Xml}},
-			parse_asn(Spec, Count + 1, T, Dev);			%% Continue parsing
-		{ok, Dec} ->									%% Last piece of decoded data
-			io:format("~n~n-- CDR #~p~n",[Count]),
+			From ! {parse_result, State, Dec, Asn, Xml},
+			parse_asn(Spec, Count + 1, T, Dev, ReplyAs);					%% Continue parsing
+		{ok, Dec} ->											%% Last piece of decoded data
+			Dev ! {status, ReplyAs, io_lib:format("~n~n<!-- CDR #~p -->~n",[Count])},
 			%Data = tuple_to_list(Dec),		%% Get data
 			%io:fwrite("~p~n",[Data]),
 			Asn = to_asn(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db),	%% Human readable printout
 			Xml = to_xml(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db), 
 			{From, State} = Dev,
-			From ! {parse_result, State, {Dec, Asn, Xml}},
+			From ! {parse_result, State, Dec, Asn, Xml},
 			ok;
-		Other ->										%% Error
-			io:format("~p~n",[Other]),				%% Report
-			Other										%% Quite parsing
+		Other ->												%% Error
+			%%io:format("~p~n",[Other]),							%% Report
+			Other												%% Quite parsing
 	end.
 
 %%
@@ -218,13 +230,13 @@ to_asn(Root, Data, Indent, DB) ->
 
 write_asn_elem(Name, Def, Data, Indent, DB) when is_tuple(Data) ->
 	write_asn_elem(Name, Def, tuple_to_list(Data), Indent, DB);
-write_asn_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='SEQUENCE' -> 	%% Handle SEQUENCE type
+write_asn_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SEQUENCE' -> 	%% Handle SEQUENCE type
 	Components = Def#'SEQUENCE'.components,
 	N1 = [indent(Indent) | atom_to_list(Name)],
 	[io_lib:format("~s ::= SEQUENCE {~n",[N1]) | 
 	 [write_asn_comp(T, Components, Indent+1, DB) |
 	 [io_lib:format("~s}~n",[indent(Indent)])]]];
-write_asn_elem(Name, Def, Data, Indent, DB) when element(1,Def)=='SEQUENCE OF' -> 	%% Handle SEQUENCE OF type
+write_asn_elem(_, Def, Data, Indent, DB) when element(1,Def)=='SEQUENCE OF' -> 	%% Handle SEQUENCE OF type
 	Type = element(2, Def),
 	D1 = Type#type.def,
 	case element(1, D1) of
@@ -237,7 +249,7 @@ write_asn_elem(Name, Def, Data, Indent, DB) when element(1,Def)=='SEQUENCE OF' -
 	_ ->
 		io_lib:format("Def: ~p~n",[D1])
 	end;
-write_asn_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='SET' -> 	%% Handle SET type
+write_asn_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SET' -> 	%% Handle SET type
 	Components = element(1,Def#'SET'.components),
 	N1 = [indent(Indent) | atom_to_list(Name)],
 	[io_lib:format("~s ::= SET {~n",[N1]) | 
@@ -253,13 +265,13 @@ write_asn_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='CHOICE' -> %%
 	[io_lib:format("~s ::= CHOICE {~n",[N1]) |
 	 [write_asn_elem(H, D1, Data, Indent+1, DB) |
 	 [io_lib:format("~s}~n",[indent(Indent)])]]];
-write_asn_elem(Name, Def, Data, Indent, DB) when element(1,Def)=='Externaltypereference' -> %% New definition
+write_asn_elem(_, Def, Data, Indent, DB) when element(1,Def)=='Externaltypereference' -> %% New definition
 	DefRec = getDefinition(DB, Def#'Externaltypereference'.type),
 	N1 = DefRec#typedef.name,									%% Name of element
 	D1 = DefRec#typedef.typespec#type.def,						%% Type of element
 	%io_lib:format("Name: ~p~nRecord: ~p~n",[Name, Data]).
 	write_asn_elem(N1, D1, Data, Indent, DB);
-write_asn_elem(Name, Def, Data, Indent, DB) ->						%% BIG HACK, need to check!!
+write_asn_elem(Name, _, Data, Indent, _) ->						%% BIG HACK, need to check!!
 	N1 = [indent(Indent) | atom_to_list(Name)],
 	io_lib:format( "~50.49s ~p~n",[N1, Data]).
 	
@@ -273,14 +285,14 @@ write_asn_comp([DH|DT], [CH|CT], Indent, DB) ->								%% Handle ComponentType
 	[write_asn_type(DH, CH, Def, Indent, DB) | [write_asn_comp(DT, CT, Indent, DB)]].
 	
 write_asn_type([],_,_,_,_) -> [];
-write_asn_type(Data, Comp, Def, Indent, DB) when is_tuple(Def), 
-										 element(1, Def)=='Externaltypereference' ->
+write_asn_type(Data, _, Def, Indent, DB) when is_tuple(Def), 
+										      element(1, Def)=='Externaltypereference' ->
 	Name = Def#'Externaltypereference'.type,
 	to_asn(Name, Data, Indent+1, DB);
 %	 [write_asn_type(T, [], Def, Indent, DB)]];	
 write_asn_type(Data, Comp, Def, Indent, DB) when is_tuple(Def), 
 										 element(1, Def)=='SEQUENCE OF' ->
-	[{'CONTEXT', Tag} | T] = Comp#'ComponentType'.tags,
+	[{'CONTEXT', Tag} | _] = Comp#'ComponentType'.tags,
 	%% Look-ahead for child definition
 	Type = element(2, Def),
 	D1 = Type#type.def,
@@ -294,17 +306,17 @@ write_asn_type(Data, Comp, Def, Indent, DB) when is_tuple(Def),
 	_ ->
 		io_lib:format("Def: ~p~n",[D1])
 	end;
-write_asn_type(Data, Comp, Def, Indent, DB) when Def == 'OCTET STRING' -> 
-	[{'CONTEXT', Tag} | T] = Comp#'ComponentType'.tags,
+write_asn_type(Data, Comp, Def, Indent, _) when Def == 'OCTET STRING' -> 
+	[{'CONTEXT', Tag} | _] = Comp#'ComponentType'.tags,
 	D1 = [io_lib:format("~2.16.0B", [X]) || X <- Data],
 	Name = [indent(Indent) | atom_to_list(Comp#'ComponentType'.name)],
 	io_lib:format( "~50.49s [~2.10.0B] ~s~n",[Name, Tag, D1]);
-write_asn_type(Data, Comp, Def, Indent, DB) when is_binary(Data) -> 	
-	[{'CONTEXT', Tag} | T] = Comp#'ComponentType'.tags,
+write_asn_type(Data, Comp, _, Indent, _) when is_binary(Data) -> 	
+	[{'CONTEXT', Tag} | _] = Comp#'ComponentType'.tags,
 	Name = [indent(Indent) | atom_to_list(Comp#'ComponentType'.name)],
 	io_lib:format( "~50.49s [~2.10.0B] ~p~n",[Name, Tag, binary_to_list(Data)]);	
-write_asn_type(Data, Comp, Def, Indent, DB)  -> 	
-	[{'CONTEXT', Tag} | T] = Comp#'ComponentType'.tags,
+write_asn_type(Data, Comp, _, Indent, _)  -> 	
+	[{'CONTEXT', Tag} | _] = Comp#'ComponentType'.tags,
 	Name = [indent(Indent) | atom_to_list(Comp#'ComponentType'.name)],
 	io_lib:format( "~50.49s [~2.10.0B] ~p~n",[Name, Tag, Data]).
 	 
@@ -317,12 +329,12 @@ to_xml(Root, Data, Indent, DB) ->
 
 write_xml_elem(Name, Def, Data, Indent, DB) when is_tuple(Data) ->
 	write_xml_elem(Name, Def, tuple_to_list(Data), Indent, DB);
-write_xml_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='SEQUENCE' -> 	%% Handle SEQUENCE type
+write_xml_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SEQUENCE' -> 	%% Handle SEQUENCE type
 	Components = Def#'SEQUENCE'.components,
 	[io_lib:format("~s<~s>~n",[indent(Indent),Name]) | 
 	 [write_xml_comp(T, Components, Indent+1, DB) |
 	 [io_lib:format("~s</~s>~n",[indent(Indent),Name])]]];
-write_xml_elem(Name, Def, Data, Indent, DB) when element(1,Def)=='SEQUENCE OF' -> 	%% Handle SEQUENCE OF type
+write_xml_elem(_, Def, Data, Indent, DB) when element(1,Def)=='SEQUENCE OF' -> 	%% Handle SEQUENCE OF type
 	Type = element(2, Def),
 	D1 = Type#type.def,
 	case element(1, D1) of
@@ -334,7 +346,7 @@ write_xml_elem(Name, Def, Data, Indent, DB) when element(1,Def)=='SEQUENCE OF' -
 	_ ->
 		io_lib:format("Def: ~p~n",[D1])
 	end;
-write_xml_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='SET' -> 	%% Handle SET type
+write_xml_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SET' -> 	%% Handle SET type
 	Components = element(1,Def#'SET'.components),
 	[io_lib:format( "~s<~s>~n",[indent(Indent), Name]) |
 	 [write_xml_comp(T, Components, Indent+1, DB) |
@@ -345,17 +357,15 @@ write_xml_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='CHOICE' -> %%
 	D1 = Type#type.def,											%% Type of element
 	[Record] = T,
 	Data = to_list(Record),
-	N1 = [indent(Indent) | atom_to_list(Name)],
 	[io_lib:format("~s<~s>~n",[indent(Indent),Name])|
 	 [write_xml_elem(H, D1, Data, Indent+1, DB) |
 	 [io_lib:format("~s</~s>~n",[indent(Indent),Name])]]];
-write_xml_elem(Name, Def, Data, Indent, DB) when element(1,Def)=='Externaltypereference' -> %% New definition
+write_xml_elem(_, Def, Data, Indent, DB) when element(1,Def)=='Externaltypereference' -> %% New definition
 	DefRec = getDefinition(DB, Def#'Externaltypereference'.type),
 	N1 = DefRec#typedef.name,									%% Name of element
 	D1 = DefRec#typedef.typespec#type.def,						%% Type of element
-	%io_lib:format("Name: ~p~nRecord: ~p~n",[Name, Data]).
 	write_xml_elem(N1, D1, Data, Indent, DB);
-write_xml_elem(Name, Def, Data, Indent, DB) ->						%% BIG HACK, need to check!!
+write_xml_elem(Name, _, Data, Indent, _) ->						%% BIG HACK, need to check!!
 	io_lib:format( "~s<~s>~p</~s>~n",[indent(Indent), Name, Data, Name]).
 	
 write_xml_comp([], _, _,_) -> [];
@@ -368,14 +378,13 @@ write_xml_comp([DH|DT], [CH|CT], Indent, DB) ->								%% Handle ComponentType
 	[write_xml_type(DH, CH, Def, Indent, DB) | [write_xml_comp(DT, CT, Indent, DB)]].
 	
 write_xml_type([],_,_,_,_) -> [];
-write_xml_type(Data, Comp, Def, Indent, DB) when is_tuple(Def), 
+write_xml_type(Data, _, Def, Indent, DB) when is_tuple(Def), 
 										 element(1, Def)=='Externaltypereference' ->
 	Name = Def#'Externaltypereference'.type,
 	to_xml(Name, Data, Indent+1, DB);
 %	 [write_xml_type(T, [], Def, Indent, DB)]];	
 write_xml_type(Data, Comp, Def, Indent, DB) when is_tuple(Def), 
 										 element(1, Def)=='SEQUENCE OF' ->
-	[{'CONTEXT', Tag} | T] = Comp#'ComponentType'.tags,
 	%% Look-ahead for child definition
 	Type = element(2, Def),
 	D1 = Type#type.def,
@@ -389,17 +398,14 @@ write_xml_type(Data, Comp, Def, Indent, DB) when is_tuple(Def),
 	_ ->
 		io_lib:format("Def: ~p~n",[D1])
 	end;
-write_xml_type(Data, Comp, Def, Indent, DB) when Def == 'OCTET STRING' -> 
-	[{'CONTEXT', Tag} | T] = Comp#'ComponentType'.tags,
+write_xml_type(Data, Comp, Def, Indent, _) when Def == 'OCTET STRING' -> 
 	D1 = [io_lib:format("~2.16.0B", [X]) || X <- Data],
 	Name = Comp#'ComponentType'.name,
-	io_lib:format( "~s<~s>~s</~s>~n",[indent(Indent), Name, Data, Name]);
-write_xml_type(Data, Comp, Def, Indent, DB) when is_binary(Data) -> 	
-	[{'CONTEXT', Tag} | T] = Comp#'ComponentType'.tags,
+	io_lib:format( "~s<~s>~s</~s>~n",[indent(Indent), Name, D1, Name]);
+write_xml_type(Data, Comp, _, Indent, _) when is_binary(Data) -> 	
 	Name = Comp#'ComponentType'.name,
 	io_lib:format( "~s<~s>~s</~s>~n",[indent(Indent), Name, binary_to_list(Data), Name]);
-write_xml_type(Data, Comp, Def, Indent, DB)  -> 	
-	[{'CONTEXT', Tag} | T] = Comp#'ComponentType'.tags,
+write_xml_type(Data, Comp, _, Indent, _)  -> 	
 	Name = Comp#'ComponentType'.name,
 	io_lib:format( "~s<~s>~p</~s>~n",[indent(Indent), Name, Data, Name]).
 	 
@@ -456,14 +462,14 @@ getDefinition([H|T], Comp) ->
 	[Other] -> 	element(2, Other);
 	_ ->		[]
 	end;
-getDefinition([], Comp) ->
+getDefinition([], _) ->
 	[].
 		
-getChoice([], Name) -> [];
-getChoice([H|T], Name) when element(1,H) == 'ComponentType',
+getChoice([], _) -> [];
+getChoice([H|_], Name) when element(1,H) == 'ComponentType',
 							H#'ComponentType'.name == Name ->
 	H#'ComponentType'.typespec;
-getChoice([H|T], Name) -> getChoice(T, Name).
+getChoice([_|T], Name) -> getChoice(T, Name).
 
 %%
 %% Compiled ASN.1 files have no version information included, but it is needed
@@ -506,7 +512,7 @@ storeASN(Asn) ->
 	%% Store asn.1 spec (DB, Module, Root Tag) for later use
 	C = filename:join([Dest, lists:concat([Base, ".cfg"])]),
 	%% Replace ETS reference with DB filename
-	file:write_file(C, io_lib:format("~p.~n",[Asn#asn.spec#asn_spec{db=D}])),
+	file:write_file(C, io_lib:format("~p.~n",[Asn])),
 	Asn#asn{file=New}.
 	
 %%

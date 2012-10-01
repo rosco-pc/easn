@@ -9,7 +9,7 @@
               <object class="sizeritem">
                 <object class="wxFlexGridSizer">
                   <object class="sizeritem">
-                    <option>0</option>
+                    <option>1</option>
                     <flag>wxALIGN_CENTER_VERTICAL|wxALL</flag>
                     <border>5</border>
                     <object class="wxStaticText" name="m_staticText1">
@@ -18,73 +18,50 @@
                     </object>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxTextCtrl" name="File">
-                      <size>180,-1</size>
-                      <maxlength>0</maxlength>
+                    <object class="wxFilePickerCtrl" name="file">
+                      <size>274,-1</size>
                     </object>
-                    <option>0</option>
-                    <flag>wxALL</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <option>0</option>
-                    <flag>wxALL</flag>
-                    <border>5</border>
-                    <object class="wxButton" name="Browse">
-                      <label>Browse...</label>
-                      <default>0</default>
-                    </object>
-                  </object>
-                  <object class="sizeritem">
-                    <option>0</option>
-                    <flag>wxALIGN_CENTER_VERTICAL|wxALL</flag>
-                    <border>5</border>
-                    <object class="wxStaticText" name="m_staticText2">
-                      <label>Version</label>
-                      <wrap>-1</wrap>
-                    </object>
-                  </object>
-                  <object class="sizeritem">
-                    <option>0</option>
-                    <flag>wxALL</flag>
-                    <border>5</border>
-                    <object class="wxTextCtrl" name="Version">
-                      <value/>
-                      <maxlength>0</maxlength>
-                    </object>
-                  </object>
-                  <object class="spacer">
                     <option>1</option>
-                    <flag>wxEXPAND</flag>
+                    <flag>wxALL|wxEXPAND</flag>
                     <border>5</border>
-                    <size>0,0</size>
                   </object>
                   <object class="sizeritem">
-                    <option>0</option>
-                    <flag>wxALIGN_CENTER_VERTICAL|wxALL</flag>
-                    <border>5</border>
-                    <object class="wxStaticText" name="m_staticText3">
-                      <tooltip>For use in Specification selection list</tooltip>
+                    <object class="wxStaticText" name="m_staticText2">
                       <label>Title</label>
                       <wrap>-1</wrap>
                     </object>
+                    <option>1</option>
+                    <flag>wxALIGN_CENTER_VERTICAL|wxALL</flag>
+                    <border>5</border>
                   </object>
                   <object class="sizeritem">
-                    <option>0</option>
-                    <flag>wxALL</flag>
-                    <border>5</border>
-                    <object class="wxTextCtrl" name="Title">
-                      <value/>
+                    <object class="wxTextCtrl" name="title">
+                      <size>180,-1</size>
                       <maxlength>0</maxlength>
                     </object>
-                  </object>
-                  <object class="spacer">
                     <option>1</option>
-                    <flag>wxEXPAND</flag>
+                    <flag>wxALL</flag>
                     <border>5</border>
-                    <size>0,0</size>
                   </object>
-                  <cols>3</cols>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="m_staticText3">
+                      <label>Version</label>
+                      <wrap>-1</wrap>
+                      <tooltip>For use in Specification selection list</tooltip>
+                    </object>
+                    <option>1</option>
+                    <flag>wxALIGN_CENTER_VERTICAL|wxALL</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxTextCtrl" name="version">
+                      <maxlength>0</maxlength>
+                    </object>
+                    <option>1</option>
+                    <flag>wxALL</flag>
+                    <border>5</border>
+                  </object>
+                  <cols>2</cols>
                   <rows>3</rows>
                   <vgap>0</vgap>
                   <hgap>0</hgap>
@@ -103,7 +80,7 @@
             <border>5</border>
           </object>
           <object class="sizeritem">
-            <object class="wxRadioBox" name="Encoding">
+            <object class="wxRadioBox" name="enc">
               <label>Encoding Rule</label>
               <dimension>3</dimension>
               <content>
@@ -113,7 +90,7 @@
               </content>
               <selection>0</selection>
               <dimension>3</dimension>
-              <style>wxBORDER_NONE|wxRA_SPECIFY_COLS</style>
+              <style>wxSIMPLE_BORDER|wxRA_SPECIFY_COLS</style>
             </object>
             <option>1</option>
             <flag>wxALL|wxEXPAND|wxALIGN_CENTRE_VERTICAL|wxALIGN_CENTRE_HORIZONTAL</flag>
@@ -126,6 +103,7 @@
                 <border>5</border>
                 <object class="wxButton" name="wxID_OK">
                   <label>&amp;OK</label>
+                  <default>1</default>
                 </object>
               </object>
               <object class="button">

@@ -1,7 +1,7 @@
 <?xml version="1.0" ?>
 <resource class="wxScrolledWindow">
   <object class="wxFrame" name="main">
-    <object class="wxBoxSizer" name="out_info">
+    <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
       <object class="sizeritem">
         <object class="wxBoxSizer">
@@ -13,12 +13,11 @@
                     <object class="wxStaticBoxSizer">
                       <object class="sizeritem">
                         <object class="wxComboBox" name="choose">
-                          <selection>1</selection>
                           <tooltip>Select ASN.1 Specification to use</tooltip>
                           <style>wxCB_READONLY|wxCB_SORT</style>
                         </object>
                         <option>1</option>
-                        <flag>wxALL|wxEXPAND</flag>
+                        <flag>wxALL|wxEXPAND|wxGROW</flag>
                         <border>5</border>
                       </object>
                       <label>ASN.1 Specification</label>
@@ -140,7 +139,7 @@
                         <object class="wxBoxSizer">
                           <orient>wxVERTICAL</orient>
                           <object class="sizeritem">
-                            <object class="wxTextCtrl" name="out_info">
+                            <object class="wxTextCtrl" name="box">
                               <font>
                                 <size>9</size>
                                 <style>normal</style>

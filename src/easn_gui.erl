@@ -22,6 +22,8 @@
 %%%-------------------------------------------------------------------
 
 -module(easn_gui).
+%-export([start/1]).
+
 -compile(export_all).
 
 -include("easn.hrl").
@@ -37,71 +39,93 @@ start(From) ->
     true = wxXmlResource:load(Xrc, rc_dir("menu.xrc")),			%% Load Menu bar
     Frame = wxFrame:new(),										%% Create new WIndow
     myframe(Wx,Frame),											%% Build-up window
-    wxFrame:show(Frame),										%% Show it
+    
 	%% Get references for later use
-	Chooser = wxXmlResource:xrcctrl(Frame, "out_info", wxTxtCtrl),
-	Asn = wxXmlResource:xrcctrl(Frame, "out_asn", wxTxtCtrl),
-	Xml = wxXmlResource:xrcctrl(Frame, "out_xml", wxTxtCtrl),
-	Hex = wxXmlResource:xrcctrl(Frame, "out_hex", wxTxtCtrl),
+	Chooser = wxXmlResource:xrcctrl(Frame, "choose", wxComboBox),
+	Out = wxXmlResource:xrcctrl(Frame, "out_info", wxTextCtrl),
+	Asn = wxXmlResource:xrcctrl(Frame, "out_asn", wxTextCtrl),
+	Xml = wxXmlResource:xrcctrl(Frame, "out_xml", wxTextCtrl),
+	Hex = wxXmlResource:xrcctrl(Frame, "out_hex", wxTextCtrl),
 	Comp = wxXmlResource:xrcctrl(Frame, "components", wxTreeCtrl),
-	W = #window{frame=Frame, asn=Asn, xml=Xml,
+	Recent = wxXmlResource:xrcctrl(Frame, "recent", wxMenu),
+	W = #window{frame=Frame, asn=Asn, xml=Xml, info=Out,
 				hex=Hex,comp=Comp,choice=Chooser},
-    loop(#state{window=W,parse=From}),							%% Handle GUI events
+				
+	%% Add already known ASN specifications to the ComboBox
+	List = scan_asn(),
+	%io:format("ASN: ~p~n",[List]),
+	[wxComboBox:append(Chooser, C#asn.title, C) || C <- List],
+	
+	%% Select last used ASN.1 spec
+	Config = get_config(),
+	Index = case Config#config.files of
+			[] 		   -> 0;
+			[{_F,A}|T] -> wxComboBox:findString(Chooser, A#asn.title)
+			end, 
+	wxComboBox:setSelection(Chooser, Index),
+	Spec = wxComboBox:getClientData(Chooser, Index),
+	
+	%% Add recent file to menu
+	add_recent(Recent, Config#config.files),
+	
+	wxFrame:show(Frame),										%% Show frame
+	loop(#state{window=W,parse=From,asn=Spec}),					%% Handle GUI events
 	io:format("Close wx~n",[]),
     wx:destroy(),												%% Exit.
 	From ! {close, self(), []}.
 
 rc_dir(File) ->
 	SelfDir = filename:dirname(code:which(?MODULE)),
-	filename:join([SelfDir,rc,File]).
+	filename:join([SelfDir,"rc",File]).
 
 %% Main event loop
 loop(State) ->
     receive 
+    %% Handle window acions
 	#wx{id=Id, event=#wxCommand{}} ->
 	    loop(handle_cmd(get(Id), Id, State));
+	%% Close Application
 	#wx{event=#wxClose{}} ->
-		io:format("Destroy window~n",[]),
-		Frame = State#state.window#window.frame,
-	    catch wxWindows:'Destroy'(Frame),
+		io:format("Close Application~n",[]),
+		State#state.parse!{close},				 				 %% Stop parent
+	    wxWindows:destroy(State#state.window#window.frame),		 %% Close window
 	    ok;
 	%% Handle response to view_asn request
 	%% Parsing Encoded file done
 	{parse_result, State, Data} ->
 		io:format("Partial result: ~p~n",[Data]),
 		Asn = State#state.window#window.asn,
-		A1 = wxTxtCtrl:getInsertPoint(Asn),
-		wxTxtCtrl:appendText(Asn, easn:pp(Data)),
-		A2 = wxTxtCtrl:getInsertPoint(Asn),
+		A1 = wxTextCtrl:getInsertPoint(Asn),
+		wxTextCtrl:appendText(Asn, easn:pp(Data)),
+		A2 = wxTextCtrl:getInsertPoint(Asn),
 		Xml = State#state.window#window.asn,
-		X1 = wxTxtCtrl:getInsertPoint(Xml),
-		wxTxtCtrl:appendText(Xml, easn:to_xml(Data)),
-		X2 = wxTxtCtrl:getInsertPoint(Xml),
+		X1 = wxTextCtrl:getInsertPoint(Xml),
+		wxTextCtrl:appendText(Xml, easn:to_xml(Data)),
+		X2 = wxTextCtrl:getInsertPoint(Xml),
 		%addComponent(State#state.window#window.comp, Data#result{asn={A1, A2},xml={X1, X2}}),
 		loop(State);
-	{parse_done, State, Res} ->
-		Msg = io_lib:format("Parsing done: ~p~n",[Res]),
-		Frame = State#state.window#window.frame,
+	{parse_done, State, Msg} ->
 		Out = State#state.window#window.info,
-		wxTxtCtrl:appendText(Out, Msg),
+		wxTextCtrl:appendText(Out, Msg),
 		loop(State);
 	%% Compiling ASN.1 specification done
 	{compile_done, State, Spec} ->
 		Msg = io_lib:format("Compiling done: ~p~n",[Spec]),
 		Res = State#state.asn#asn{spec=Spec},
-		Frame = State#state.window#window.frame,
-		Out = wxXmlResource:xrcctrl(Frame, "out_info", wxTxtCtrl),
-		wxTxtCtrl:appendText(out, Msg),
+		Out = State#state.window#window.info,
+		wxTextCtrl:appendText(Out, Msg),
 		%% Add new ASN.1 spec to dropdown box and select it
 		Title = lists:flatten([Res#asn.title, " - ", Res#asn.version]),
-		Chooser = wxXmlResource:xrcctrl(Frame, "choose", wxComboBox),
+		Chooser = State#state.window#window.choice,
 		wxComboBox:setSelection(Chooser, wxComboBox:append(Chooser, Title, Res)),
 		loop(Res);											%% Update State and continue
-	{error, State, Res} ->
-		Msg = io_lib:format("Error: ~p~n",[Res]),
-		Frame = State#state.window#window.frame,
-		Out = wxXmlResource:xrcctrl(Frame, "out_info", wxTxtCtrl),
-		wxTxtCtrl:appendText(out, Msg),
+	{status, State, Msg} ->
+		Out = State#state.window#window.info,
+		wxTextCtrl:appendText(Out, Msg),
+		loop(State);
+	{error, State, Msg} ->
+		Out = State#state.window#window.info,
+		wxTextCtrl:appendText(Out, Msg),
 		loop(State);
 	Ev = #wx{} ->
 	    io:format("Got ~p ~n", [Ev]),
@@ -112,17 +136,27 @@ loop(State) ->
 loop_asn(State={Dlg, File, Version, Title, Enc}) ->
 	receive
   	#wx{event=#wxClose{}} ->
-  	    io:format("~p Closing ASN.1 dialog ~n",[self()]),
+  	    io:format("Closing ASN.1 dialog ~n",[]),
 		{error, "Closed"}; 
-	#wx{event=#wxCommand{type=command_button_clicked}, id=?wxCANCEL} ->
-  	    io:format("~p Cancelling ASN.1 dialog ~n",[self()]),
+	#wx{event=#wxCommand{type=command_button_clicked}, id=?wxID_CANCEL} ->
+  	    io:format("Cancelling ASN.1 dialog ~n",[]),
 		{error, "Cancel"}; 
-	#wx{event=#wxCommand{type=command_button_clicked}, id=?wxOK} ->
-		Res = #asn{file=wxTextCtrl:getValue(File),
+	#wx{event = #wxFileDirPicker{type = command_filepicker_changed, path = Path}} ->
+		E = filename:extension(Path),
+		T = case filename:extension(filename:basename(Path, E)) of
+			[] -> filename:basename(Path, E);
+			E1 -> filename:basename(Path, E1++E)				%% Deal with .set.asn
+			end,
+		%% Suggest title
+		wxTextCtrl:clear(Title),
+		wxTextCtrl:appendText(Title, T),
+		loop_asn(State);
+	#wx{event=#wxCommand{type=command_button_clicked}, id=?wxID_OK} ->
+		Res = #asn{file=wxFilePickerCtrl:getPath(File),
 				   version=wxTextCtrl:getValue(Version),
 				   title=wxTextCtrl:getValue(Title),
 				   enc=wxRadioBox:getSelection(Enc)},
-  	    io:format("ASN.1 Data ~p~n",[self()]),
+  	    io:format("ASN.1 Data ~p~n",[Res]),
 		{ok, Res};
 	#wx{event=#wxCommand{type=command_button_clicked}, id=Id} ->
 		handle_cmd(get(Id), Id, Dlg),
@@ -140,20 +174,20 @@ myframe(Parent, Frame) ->
     wxTopLevelWindow:setIcon(Frame, wxXmlResource:loadIcon(Xrc,"appicon")),
     %% Load and setup menubar
     wxFrame:setMenuBar(Frame, wxXmlResource:loadMenuBar(Xrc, "menu")),
-    %% wxFrame:setToolBar(Frame, wxXmlResource:loadToolBar(Xrc, Frame, "main_toolbar")),
+    %wxFrame:setToolBar(Frame, wxXmlResource:loadToolBar(Xrc, Frame, "main_toolbar")),
     wxFrame:createStatusBar(Frame, [{number,1}]),
     ok = wxFrame:connect(Frame, close_window), 
     connect(Frame).
   
 connect(Frame) ->    
 	%% Connect 'standard' menus, make sure that NAME in xrc = wxID_XXXXX
-    wxFrame:connect(Frame,command_menu_selected, [{id, ?wxID_OPEN}]),
-    wxFrame:connect(Frame,command_menu_selected, [{id, ?wxID_SAVE}]),
-    wxFrame:connect(Frame,command_menu_selected, [{id, ?wxID_SAVEAS}]),
-    wxFrame:connect(Frame,command_menu_selected, [{id, ?wxID_COPY}]),
-    wxFrame:connect(Frame,command_menu_selected, [{id, ?wxID_HELP}]),
-    wxFrame:connect(Frame,command_menu_selected, [{id, ?wxID_EXIT}]),
-    wxFrame:connect(Frame,command_menu_selected, [{id, ?wxID_ABOUT}]),
+    wxFrame:connect(Frame, command_menu_selected, [{id, ?wxID_OPEN}]),
+    wxFrame:connect(Frame, command_menu_selected, [{id, ?wxID_SAVE}]),
+    wxFrame:connect(Frame, command_menu_selected, [{id, ?wxID_SAVEAS}]),
+    wxFrame:connect(Frame, command_menu_selected, [{id, ?wxID_COPY}]),
+    wxFrame:connect(Frame, command_menu_selected, [{id, ?wxID_HELP}]),
+    wxFrame:connect(Frame, command_menu_selected, [{id, ?wxID_EXIT}]),
+    wxFrame:connect(Frame, command_menu_selected, [{id, ?wxID_ABOUT}]),
 	%% Connect own menus
     Menus = [importASN, options],
     [connect_xrcid(Str,Frame) || Str <- Menus],
@@ -162,12 +196,12 @@ connect(Frame) ->
 connect_xrcid(Name,Frame) ->
     ID = wxXmlResource:getXRCID(atom_to_list(Name)),
     put(ID, Name),
-    wxFrame:connect(Frame,command_menu_selected,[{id,ID}]).
+    wxFrame:connect(Frame, command_menu_selected, [{id,ID}]).
 
 %%
 %% Update Recently used files menu
 %%
-add_recent(Recent, []) -> ok;
+add_recent(_, []) -> ok;
 add_recent(Recent, Files) ->
 	%% Add last used files
 	Add = fun(C, Cnt) -> 
@@ -197,13 +231,17 @@ handle_cmd(_, ?wxID_OPEN, State) ->
     State1;
 
 handle_cmd(_, ?wxID_SAVE, State) ->
-	Frame = State#state.window#window.frame,
 	File = State#state.file,
 	Dir = filename:dirname(File),							
     Ext = filename:extension(File),	
     Base = filename:basename(File,Ext),
+	%% Save ASN.1
 	Path = lists:concat([Dir, "/", Base, ".txt"]), 
 	Out = State#state.window#window.asn,
+	wxTextCtrl:saveFile(Out, [{file, Path}]),
+	%% Save XML
+	Path = lists:concat([Dir, "/", Base, ".xml"]), 
+	Out = State#state.window#window.xml,
 	wxTextCtrl:saveFile(Out, [{file, Path}]),
     State;
 
@@ -225,15 +263,14 @@ handle_cmd(_, ?wxID_SAVEAS, State) ->
     State;
 
 handle_cmd(_, ?wxID_EXIT, State) ->
-	io:format("Closing application~n",[]),
-	Frame = State#state.window#window.frame,
-    wxFrame:close(Frame),
+	io:format("Exit application~n",[]),
+    wxFrame:close(State#state.window#window.frame),				 %% Close window
 	State;
 
 handle_cmd(_, ?wxID_ABOUT, State) ->
 	Frame = State#state.window#window.frame,
     Msg = lists:flatten(["ASN.1 viewer/editor version 1.0",
-						 "\n\n",169," 2012 Robert Schmersel, Ericsson AB"]),
+						 "\n\n",169," 2012 Robert Schmersel"]),
     MD = wxMessageDialog:new(Frame,Msg,
 			     [{style, ?wxOK bor ?wxICON_INFORMATION}, 
 			      {caption, "About"}]),
@@ -243,14 +280,27 @@ handle_cmd(_, ?wxID_ABOUT, State) ->
 
 handle_cmd(importASN, _, State) ->
 	Frame = State#state.window#window.frame,
+	%% Create Dialog
     Dlg = wxDialog:new(),
     Xrc = wxXmlResource:get(),
     true = wxXmlResource:loadDialog(Xrc, Dlg, Frame, "asn_dlg"),
-	File = wxXmlResource:xrcctrl(Dlg, "file", wxTxtCtrl),
-	Version = wxXmlResource:xrcctrl(Dlg, "version", wxTxtCtrl),
-	Title = wxXmlResource:xrcctrl(Dlg, "title", wxTxtCtrl),
-	Enc = wxXmlResource:xrcctrl(Dlg, "encoding", wxRadioBox),
+	
+	%% Get references
+	File = wxXmlResource:xrcctrl(Dlg, "file", wxFilePickerCtrl),
+	Version = wxXmlResource:xrcctrl(Dlg, "version", wxTextCtrl),
+	Title = wxXmlResource:xrcctrl(Dlg, "title", wxTextCtrl),
+	Enc = wxXmlResource:xrcctrl(Dlg, "enc", wxRadioBox),
+	
+	%% Connect actions
+	wxDialog:connect(Dlg, close_window),
+	wxFilePickerCtrl:connect(File, command_filepicker_changed, []),
+	wxDialog:connect(Dlg, command_button_clicked, [{id, ?wxID_OK}]),
+	wxDialog:connect(Dlg, command_button_clicked, [{id, ?wxID_CANCEL}]),
+	
+	%% Show Dialog
 	wxDialog:show(Dlg),
+	
+	%% Handle dialog loop
 	case loop_asn({Dlg, File, Version, Title, Enc}) of
 	{ok, Data} ->
 	    State#state.parse ! {compile, self(), State, Data};
@@ -258,7 +308,8 @@ handle_cmd(importASN, _, State) ->
 	    io:format("~s dialog~n",[Reason]),
 		Data = State#state.asn
     end,    
-    %% In Erlang you should delete the dialog afterwards
+	
+    %% Delete the dialog
     wxDialog:destroy(Dlg),
 	State#state{asn=Data};
 
@@ -266,3 +317,32 @@ handle_cmd(Dialog, Id, State) ->
     io:format("Not implemented yet ~p (~p) ~n",[Dialog, Id]),
 	State.
    
+scan_asn() ->
+	Dir = filename:dirname(code:which(?MODULE)),				%% Directory
+	Src = filename:join([Dir, "..", "asn"]), 					%% ASN.1 Directory
+	case file:list_dir(Src) of
+	{ok, Files} -> scan_asn(Files, Src, []);					%% Read cfg files
+	{error, Reason}  -> {error, Reason}
+	end.
+
+scan_asn([], _, Res) -> Res;
+scan_asn([H|T], Dir, Res) ->
+	FN = Dir ++  [$/|H],
+	case filelib:is_dir(FN) of
+	true ->														%% Get spec
+		Ext = filename:extension(H),
+		Base = filename:basename(H,Ext),
+		case file:consult(filename:join(FN, Base++".cfg")) of
+		{error, _} ->		scan_asn(T, Dir, Res);
+		{ok, [Asn|_]} ->	scan_asn(T, Dir, [Asn|Res])
+		end;
+	false ->												
+		scan_asn(T, Dir, Res)									%% Continue
+	end.
+	
+get_config() ->	
+	Dir = filename:dirname(code:which(?MODULE)),				%% Directory
+	case file:consult(filename:join([Dir, "..", "easn.cfg"])) of
+	{error, _} ->	#config{files=[]};
+	{ok, [C|_]} ->	C
+	end.
