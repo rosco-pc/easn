@@ -1,7 +1,7 @@
 %%
 %% %CopyrightBegin%
 %%
-%% Copyright Ericsson AB 2008-2012. All Rights Reserved.
+%% Copyright Rob Schmersel 2012. All Rights Reserved.
 %%
 %% The contents of this file are subject to the Erlang Public License,
 %% Version 1.1, (the "License"); you may not use this file except in
@@ -16,20 +16,12 @@
 %%
 %% %CopyrightEnd%
 %%-------------------------------------------------------------------
-%% File    : view_asn.erl
-%% Author  : Rob Schmersel <robert.schmersel@ericsson.com>
-%% Description : Generic asn.1 viewer
+%% File    : easn.erl
+%% Author  : Rob Schmersel <rob@schmersel.net>
+%% Description : Generic asn.1 viewer & editor
 %%
 %% Created :  18 Aug 2012 - Initial release
-%% Updated :  15 Sep 2012 - Add support for ASN.1 specification with
-%%							import statements (multiple asn1db files
-%%							are used in this case)
-%%						  - Add support for multiple versions of the 
-%%							same ASN.1 specification
-%%						  - Add tag in printout
-%% Updated :  30 Sep 2012 - Add wxErlang GUI
-%%						  - Add hex View/Editor
-%%						  - Add XML View
+
 %%	Still TODO: - Allow editing/re-encoding of decoded data
 %%-------------------------------------------------------------------
 
@@ -41,8 +33,8 @@
 -compile(export_all).
 
 -include("easn.hrl").
--include_lib("asn1_records.hrl").
-
+-include("asn1_records.hrl").		%% Copied from lib/asn
+-author("Rob Schmersel <rob@schmersel.net>").
 
 %%
 %% Public API
@@ -58,11 +50,11 @@ start() ->
 %%
 %% Start CLI
 %%
-view([FN, ASN_spec, Version]) ->
+view([FN, ASN_spec, Version, Enc]) ->
 	case filelib:is_regular(ASN_spec) of
 	  true -> 
 	  	%% Compile ASN.1 Spec, get module name and root of ASN.1 spec
-		self() ! {compile, self, FN, #asn{file=ASN_spec,version=Version}},
+		self() ! {compile, self, FN, #asn{file=ASN_spec,version=Version, enc=Enc}},
 		loop();
 	  false ->
 		io:fwrite("~s does not exist~n",[ASN_spec])
@@ -77,18 +69,18 @@ view([FN, ASN_spec, Version]) ->
 %%
 loop() ->
 	receive
-	{parse, From, ReplyAs, Args} ->
-		{FN, Asn_spec} = Args,
-		Reply = parse(FN, Asn_spec, From, ReplyAs),
-		From ! {parse_done, ReplyAs, Reply},
+	{parse, Pid, {FN, Asn_spec}} ->
+		Pid ! {parse_done, parse(FN, Asn_spec, Pid)},
 		loop();
-	{compile, From, ReplyAs, Asn} ->
-		Reply = compile(Asn, From, ReplyAs),
-		From ! {compile_done, ReplyAs, Reply},
+	{compile, Pid, Asn} ->
+		Pid ! {compile_done, compile(Asn, Pid)},
+		loop();
+	{retrieve, Pid, Asn} ->
+		Pid ! {asn_spec, retrieveASN(Asn)},
 		loop();
 	{close} ->
 		ok;
-	%% Handle parse adn compile result for CLI version
+	%% Handle parse and compile result for CLI version
 	{status, _Reply, Msg} ->
 		io:format("~s",[Msg]),
 		loop();
@@ -113,43 +105,44 @@ loop() ->
 %% Parse file
 %%
 %% FN   - File to decode
-%% Spec - ASN.1 Specification details {codec module, root tag}
+%% Asn - ASN.1 Specification details {codec module, root tag}
 %%
-parse(FN, Spec, From, State) ->
+parse(FN, Asn, Pid) ->
 	case filelib:is_regular(FN) of
 	  true ->
 		%% Parse File
 		{ok, Bytes} = file:read_file(FN),
-		From ! {hex, State, to_hex(Bytes,0,[])},
-		parse_asn(Spec, 1, Bytes, From, State);								
+		Pid ! {hex, to_hex(Bytes,0,[])},
+		parse_asn(Asn#asn.spec, 1, Bytes, Pid);								
 	  false ->
-		From ! {error, State, io_lib:format("~s does not exist",[FN])}
+		Pid ! {error, io_lib:format("~s does not exist",[FN])}
 	end.
 
 %%
 %% Compile asn. specification if not already done so.
 %%
 %% ASN_spec - asn.1 specification file name
-compile(Asn, Dev, ReplyAs) ->
+compile(Asn, Pid) ->
 	ASN_spec = Asn#asn.file,
 	%% Extract specification filename without path & extension
-    Ext = filename:extension(ASN_spec),							%% Get Extension
-    Base = filename:basename(ASN_spec,Ext),						%% Get filename without extension
+    Base = basename(ASN_spec),									%% Get filename without extension
 	Dir = filename:dirname(code:which(?MODULE)),
-	Dev ! {status, ReplyAs, io_lib:format("~nCompiling asn.1 specification: ~s~n",[ASN_spec])},
+	Pid ! {status, io_lib:format("~nCompiling asn.1 specification: ~s~n",[ASN_spec])},
 	%% Check if specification alrady compiled
-	case checkASN(Asn#asn.file, Asn#asn.version) of				%% Check if already compiled version exists
+	case checkASN(Asn) of										%% Check if already compiled version exists
 	true -> 
 		retrieveASN(Asn);										%% asn.1 spec already compiled, copy it
 	false -> 
-		ok = asn1ct:compile(ASN_spec,[ber,undec_rest]),			%% Compile asn.1 specification
+		Enc = Asn#asn.enc,										%% Encoding rules used
+		ok = asn1ct:compile(ASN_spec,[Enc,undec_rest]),			%% Compile asn.1 specification
 		DBFile = filename:join([Dir, lists:concat([Base, ".asn1db"])]),
 		{ok, DB} = ets:file2tab(DBFile),						%% Read DB
 		Tag = get_root(DB),										%% Determine 'root' tag
-		Dev ! {status, ReplyAs, io_lib:format("Root: ~s~n",[Tag])},
-		S = #asn_spec{db=DB, mod=list_to_atom(Base), root=Tag},
-		storeASN(Asn#asn{spec=S}),
-		S
+		ets:delete(DB),
+		DBs = checkDB(ASN_spec),								%% get ALL asn1db files produced
+		Pid ! {status, io_lib:format("  Root: ~s~n",[Tag])},
+		S = #asn_spec{db=DBs, mod=list_to_atom(Base), root=Tag},
+		storeASN(Asn#asn{spec=S})
 	end.
 
 %%
@@ -185,28 +178,26 @@ get_root(DB, Key, Root, Tag) ->
 %% Count - piece counter
 %% Bytes - binary data to be decoded 
 %%
-parse_asn(_, _, <<>>, _, _) -> ok;									%% Done with parsing
-parse_asn(Spec, Count, <<H,T/binary>>, Dev, ReplyAs) when H==0 -> 		%% Skip filler bytes
-	parse_asn(Spec, Count, T, Dev, ReplyAs); 
-parse_asn(Spec, Count, Bytes, Dev, ReplyAs) when is_binary(Bytes) ->		%% Parse ASN.1 file
+parse_asn(_, _, <<>>, _) -> ok;									%% Done with parsing
+parse_asn(Spec, Count, <<H,T/binary>>, Dev) when H==0 -> 		%% Skip filler bytes
+	parse_asn(Spec, Count, T, Dev); 
+parse_asn(Spec, Count, Bytes, Dev) when is_binary(Bytes) ->		%% Parse ASN.1 file
 	Mod = Spec#asn_spec.mod,
 	case Mod:decode(Spec#asn_spec.root, Bytes) of
 		{ok, Dec, T} ->											%% Decoded data
-			Dev ! {status, ReplyAs, io_lib:format("~n~n<!-- CDR #~p -->~n",[Count])},
+			Dev ! {status, io_lib:format("~n~n<!-- CDR #~p -->~n",[Count])},
 			%Data = tuple_to_list(Dec),		%% Get data
 			Asn = to_asn(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db),	%% Human readable printout
 			Xml = to_xml(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db), 
-			{From, State} = Dev,
-			From ! {parse_result, State, Dec, Asn, Xml},
-			parse_asn(Spec, Count + 1, T, Dev, ReplyAs);					%% Continue parsing
+			Dev ! {parse_result, Dec, Asn, Xml},
+			parse_asn(Spec, Count + 1, T, Dev);					%% Continue parsing
 		{ok, Dec} ->											%% Last piece of decoded data
-			Dev ! {status, ReplyAs, io_lib:format("~n~n<!-- CDR #~p -->~n",[Count])},
+			Dev ! {status, io_lib:format("~n~n<!-- CDR #~p -->~n",[Count])},
 			%Data = tuple_to_list(Dec),		%% Get data
 			%io:fwrite("~p~n",[Data]),
 			Asn = to_asn(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db),	%% Human readable printout
 			Xml = to_xml(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db), 
-			{From, State} = Dev,
-			From ! {parse_result, State, Dec, Asn, Xml},
+			Dev ! {parse_result, Dec, Asn, Xml},
 			ok;
 		Other ->												%% Error
 			%%io:format("~p~n",[Other]),							%% Report
@@ -481,69 +472,114 @@ getChoice([_|T], Name) -> getChoice(T, Name).
 %%
 %% Check if the asn.1 specification as already been compiled 
 %%
-checkASN(ASN_spec, Version) ->
+checkASN(Asn) ->
 	%% Extract specification filename without path & extension
-    Ext = filename:extension(ASN_spec),							%% Get Extension
-    Base = filename:basename(ASN_spec,Ext),						%% Get filename without extension
-	V = string:join(string:tokens(Version,"."),""),				%% remove any '.' from the version number
-	Src = filename:dirname(code:which(?MODULE)),
-	Dest = filename:join([Src, "..", "asn", lists:concat([Base, ".", V])]),
-	filelib:is_dir(Dest).
+	Base = basename(Asn#asn.file),
+	Src = asn_dir(filename:dirname(code:which(?MODULE)), Base, 
+				  Asn#asn.version, Asn#asn.enc),
+	filelib:is_regular(Src ++ [Base | ".cfg"]).
 
 %%
 %% Store compiled asn.1 specification
 %%
 storeASN(Asn) ->
-	ASN_spec = Asn#asn.file,
 	%% Extract specification filename without path & extension
-    Ext = filename:extension(ASN_spec),							%% Get Extension
-    Base = filename:basename(ASN_spec,Ext),						%% Get filename without extension
-	V = string:join(string:tokens(Asn#asn.version,"."),""),		%% remove any '.' from the version number
+    Base = basename(Asn#asn.file),						%% Get filename without extension
 	Src = filename:dirname(code:which(?MODULE)),
-	Dest = filename:join([Src, "..", "asn", lists:concat([Base, ".", V])]),
+	Dest = asn_dir(Src, Base, Asn#asn.version, Asn#asn.enc),
 	%% Copy compiled asn.1 files (.beam & .asn1db) and actual asn.1 file for later use
 	file:make_dir(Dest),	
-	B = lists:concat([Base, ".beam"]),
-	file:copy(filename:join([Src, B]), filename:join([Dest, B])),
-	D = lists:concat([Base, ".asn1db"]),
-	file:copy(filename:join([Src, D]), filename:join([Dest, D])),
-	New = filename:join([Src, lists:concat([Base, ".asn"])]),
-	file:copy(ASN_spec, New),
-	%% Store asn.1 spec (DB, Module, Root Tag) for later use
-	C = filename:join([Dest, lists:concat([Base, ".cfg"])]),
-	%% Replace ETS reference with DB filename
-	file:write_file(C, io_lib:format("~p.~n",[Asn])),
-	Asn#asn{file=New}.
-	
+	Files = Asn#asn.spec#asn_spec.db,
+	%% Copy relevant files
+	B = Base++".beam",
+	copy_files([B|Files], Src, Dest),
+	New = filename:join([Src, Base++".asn"]),
+	%% Copy ASN.1 spcification
+	file:copy(Asn#asn.file, New),
+	%% Replace file reference with new location
+	A1 = Asn#asn{file=New},
+	%% Create config file
+	C = filename:join([Dest, Base++".cfg"]),
+	file:write_file(C, io_lib:format("~p.~n",[A1])),
+	%% Replace DB filenames with ETS references
+	DB = get_db_ref(Files, Src, []),
+	A1#asn.spec#asn_spec{db=DB}.
+
 %%
 %% Retrieve asn.1 specification
 %%
 retrieveASN(Asn) ->
-	ASN_spec = Asn#asn.file,
 	%% Extract specification filename without path & extension
-    Ext = filename:extension(ASN_spec),							%% Get Extension
-    Base = filename:basename(ASN_spec,Ext),						%% Get filename without extension
-	Dest = filename:dirname(code:which(?MODULE)),				%% Destination Directory
-	V = string:join(string:tokens(Asn#asn.version,"."),""),		%% remove any '.' from the version number
-	Src = filename:join([Dest, "..", "asn", lists:concat([Base, ".", V])]), %% Source Directory
-	io:fwrite("  Source: ~s~nDest  : ~s~nBase  :~s~n",[Src, Dest, Base]),
+	io:format("~p~n",[Asn]),
+    Base = basename(Asn#asn.file),
+	Dest = filename:dirname(code:which(?MODULE)),
+	Src = asn_dir(Dest, Base, Asn#asn.version, Asn#asn.enc),
+	io:format("  Src: ~s~n Dest: ~s~n  Cfg: ~s~n",[Src,Dest,filename:join([Src, Base++".cfg"])]),
 	%% Copy compiled asn.1 files
-	B = lists:concat([Base, ".beam"]),
+	B = Base++".beam",
 	file:copy(filename:join([Src, B]), filename:join([Dest, B])),
-	%% Copy and open DBs (there can be more then one)
-	{ok, [Spec]} = file:consult(filename:join([Src, lists:concat([Base, ".cfg"])])),
-	%% Open DB file and replace filename with ETS reference
-	DB = getDB(Spec#asn_spec.db, Src, []),							%% Read DB
-	Spec#asn_spec{db=DB}.
+	%% Get config
+	{ok, [Asn]} = file:consult(filename:join([Src, Base++".cfg"])),
+	%% Replace DB filenames with ETS references
+	DB = get_db_ref(Asn#asn.spec#asn_spec.db, Src, []),
+	Asn#asn.spec#asn_spec{db=DB}.
 
-getDB([H|T], Src, DB) ->
-	%file:copy(filename:join([Src, D]), filename:join([Dest, D])),	%% There is no need to copy these
+asn_dir(Dir, Base, Version, Enc) ->
+	[Dir | ["/../asn/" |[Base | [$. |[remove(Version,$.) | [$. |[atom_to_list(Enc)]]]]]]].
+
+basename(Data) ->
+	basename(lists:reverse(Data), []).
+basename([], Res) ->
+	Res;
+basename([H|T],_Res) when H == $. ->
+	basename(T, []);
+basename([H|_], Res) when H == $/ ->
+	Res;
+basename([H|T], Res) ->
+	basename(T, [H|Res]).
+
+remove(Data, Token) ->
+	remove(Data, Token, []).
+remove([], _, Res) ->
+	lists:reverse(Res);
+remove([H|T],Token, Res) when H == Token ->
+	remove(T, Token, Res);
+remove([H|T], Token, Res) ->
+	remove(T, Token, [H|Res]).
+
+get_db_ref([H|T], Src, DB) ->
 	{ok, F} = ets:file2tab(filename:join([Src,H])),
-	getDB(T, Src, [F|DB]);
-getDB([], _, DB) ->
+	get_db_ref(T, Src, [F|DB]);
+get_db_ref([], _, DB) ->
 	io:fwrite("  DB references: ~p~n",[DB]),
 	DB.
 	
+copy_files([], _, _) ->
+	ok;
+copy_files([H|T], Src, Dest) ->
+	file:copy(filename:join([Src, H]), filename:join([Dest, H])),
+	copy_files(T, Src, Dest).
+	
+checkDB(File) ->
+	case list_to_binary(lists:reverse(File)) of
+	<<"nsa.set.", _T/binary>> ->							%% Multiple ASN.1 specifications
+		{ok, Data} = file:read_file(File),
+		get_db_files(Data, <<>>, []);
+	_ -> 
+		[File]
+	end.
+	
+get_db_files(<<>>, <<>>, Files) ->
+	Files;
+get_db_files(<<>>, Line, Files) ->
+	[binary_to_list(Line)|Files];
+get_db_files(<<H:1/binary, T>>, <<>>, Files) when H == 10;
+												  H == 13 ->
+	get_db_files(T, <<>>, Files);
+get_db_files(<<H:1/binary, T>>, Line, Files) when H == 10;
+												  H == 13 ->
+	get_db_files(T, <<>>, [binary_to_list(Line)|Files]).
+								
 updateConfig(File, Asn) ->
 	Dir = filename:dirname(code:which(?MODULE)),
 	FN = filename:join([Dir, "..", lists:concat([?MODULE_STRING, ".cfg"])]),

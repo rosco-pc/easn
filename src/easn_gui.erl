@@ -1,36 +1,42 @@
 %%
+%%
 %% %CopyrightBegin%
-%% 
-%% Copyright Ericsson AB 2009. All Rights Reserved.
-%% 
+%%
+%% Copyright Rob Schmersel 2012. All Rights Reserved.
+%%
 %% The contents of this file are subject to the Erlang Public License,
 %% Version 1.1, (the "License"); you may not use this file except in
 %% compliance with the License. You should have received a copy of the
 %% Erlang Public License along with this software. If not, it can be
 %% retrieved online at http://www.erlang.org/.
-%% 
+%%
 %% Software distributed under the License is distributed on an "AS IS"
 %% basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
 %% the License for the specific language governing rights and limitations
 %% under the License.
-%% 
+%%
 %% %CopyrightEnd%
-%%%
-%%% Description : Testing and demo xrc's
-%%%               This mimics the xrc demo from wxwidgets.
-%%% Created :  4 Dec 2007 by Dan Gudmundsson <dgud@erix.ericsson.se>
-%%%-------------------------------------------------------------------
+%%-------------------------------------------------------------------
+%% File    : easn_gui.erl
+%% Author  : Rob Schmersel <rob@schmersel.net>
+%% Description : GUI for generic asn.1 viewer & editor
+%%
+%% Created :  30 Aug 2012 - Initial release
+%% Updated :  30 Sep 2012 - use xrc for GUI
+
+%%	Still TODO: - Allow editing/re-encoding of decoded data
+%%-------------------------------------------------------------------
+
 
 -module(easn_gui).
 %-export([start/1]).
-
 -compile(export_all).
 
 -include("easn.hrl").
 -include_lib("wx/include/wx.hrl").
 
 
-start(From) ->
+start(Pid) ->
     Wx = wx:new(),											    %% Starts wxwidgets
     Xrc = wxXmlResource:get(),									%% use XRC to define appplication layout
     wxXmlResource:initAllHandlers(Xrc),							%% Initialize ALL handlers (quick and dirty)
@@ -53,26 +59,26 @@ start(From) ->
 				
 	%% Add already known ASN specifications to the ComboBox
 	List = scan_asn(),
-	%io:format("ASN: ~p~n",[List]),
 	[wxComboBox:append(Chooser, C#asn.title, C) || C <- List],
 	
 	%% Select last used ASN.1 spec
 	Config = get_config(),
 	Index = case Config#config.files of
 			[] 		   -> 0;
-			[{_F,A}|T] -> wxComboBox:findString(Chooser, A#asn.title)
+			[{_F,A}|_] -> wxComboBox:findString(Chooser, A#asn.title)
 			end, 
 	wxComboBox:setSelection(Chooser, Index),
-	Spec = wxComboBox:getClientData(Chooser, Index),
-	
+	Data = wxComboBox:getClientData(Chooser, Index),
+	Pid ! {retrieve, self(), Data},								%% Make sure that all files are in place
+																%% and get the correct DB references
 	%% Add recent file to menu
 	add_recent(Recent, Config#config.files),
 	
 	wxFrame:show(Frame),										%% Show frame
-	loop(#state{window=W,parse=From,asn=Spec}),					%% Handle GUI events
+	loop(#state{window=W,parse=Pid,asn=Asn}),					%% Handle GUI events
 	io:format("Close wx~n",[]),
     wx:destroy(),												%% Exit.
-	From ! {close, self(), []}.
+	Pid ! {close}.
 
 rc_dir(File) ->
 	SelfDir = filename:dirname(code:which(?MODULE)),
@@ -87,12 +93,11 @@ loop(State) ->
 	%% Close Application
 	#wx{event=#wxClose{}} ->
 		io:format("Close Application~n",[]),
-		State#state.parse!{close},				 				 %% Stop parent
-	    wxWindows:destroy(State#state.window#window.frame),		 %% Close window
+	    wxWindow:destroy(State#state.window#window.frame),		 %% Close window
 	    ok;
 	%% Handle response to view_asn request
 	%% Parsing Encoded file done
-	{parse_result, State, Data} ->
+	{parse_result, Data} ->
 		io:format("Partial result: ~p~n",[Data]),
 		Asn = State#state.window#window.asn,
 		A1 = wxTextCtrl:getInsertPoint(Asn),
@@ -109,21 +114,26 @@ loop(State) ->
 		wxTextCtrl:appendText(Out, Msg),
 		loop(State);
 	%% Compiling ASN.1 specification done
-	{compile_done, State, Spec} ->
-		Msg = io_lib:format("Compiling done: ~p~n",[Spec]),
-		Res = State#state.asn#asn{spec=Spec},
+	{compile_done, _State, Asn} ->
+		Msg = "ASN.1 specification successfuly compiled",
 		Out = State#state.window#window.info,
 		wxTextCtrl:appendText(Out, Msg),
 		%% Add new ASN.1 spec to dropdown box and select it
-		Title = lists:flatten([Res#asn.title, " - ", Res#asn.version]),
+		Title = Asn#asn.title,
 		Chooser = State#state.window#window.choice,
-		wxComboBox:setSelection(Chooser, wxComboBox:append(Chooser, Title, Res)),
-		loop(Res);											%% Update State and continue
-	{status, State, Msg} ->
+		wxComboBox:setSelection(Chooser, wxComboBox:append(Chooser, Title, Asn)),
+		%% Update State and continue
+		loop(State#state{asn=Asn});
+	%% Retrieved ASN data (and files put in place)
+	{asn_spec, _State, Asn} ->
+		loop(State#state{asn=Asn});
+	%% Status message
+	{status, _State, Msg} ->
 		Out = State#state.window#window.info,
 		wxTextCtrl:appendText(Out, Msg),
 		loop(State);
-	{error, State, Msg} ->
+	%% Error Message
+	{error, _State, Msg} ->
 		Out = State#state.window#window.info,
 		wxTextCtrl:appendText(Out, Msg),
 		loop(State);
@@ -220,15 +230,14 @@ handle_cmd(_, ?wxID_OPEN, State) ->
     case wxDialog:showModal(FD) of
 	?wxID_OK ->
 		FN = wxFileDialog:getPath(FD),
-		io:format("Open file: ~p~n", [FN]),
-		State#state.parse ! {parse, self(), State#state{file=FN}, FN},
-		State1 = State#state{file=FN};
+		State#state.parse ! {parse, self(), {FN, State#state.asn#asn.spec}},
+		S1 = State#state{file=FN};
 	_ ->
 		io:format("No file selected~n"),
-	    State1 = State
+	    S1 = State
     end,
     wxFileDialog:destroy(FD),
-    State1;
+    S1;
 
 handle_cmd(_, ?wxID_SAVE, State) ->
 	File = State#state.file,
@@ -303,7 +312,7 @@ handle_cmd(importASN, _, State) ->
 	%% Handle dialog loop
 	case loop_asn({Dlg, File, Version, Title, Enc}) of
 	{ok, Data} ->
-	    State#state.parse ! {compile, self(), State, Data};
+	    State#state.parse ! {compile, self(), Data};
 	{error, Reason} ->
 	    io:format("~s dialog~n",[Reason]),
 		Data = State#state.asn
@@ -319,7 +328,7 @@ handle_cmd(Dialog, Id, State) ->
    
 scan_asn() ->
 	Dir = filename:dirname(code:which(?MODULE)),				%% Directory
-	Src = filename:join([Dir, "..", "asn"]), 					%% ASN.1 Directory
+	Src = filename:join([Dir, "../asn"]), 						%% ASN.1 Directory
 	case file:list_dir(Src) of
 	{ok, Files} -> scan_asn(Files, Src, []);					%% Read cfg files
 	{error, Reason}  -> {error, Reason}
@@ -330,8 +339,7 @@ scan_asn([H|T], Dir, Res) ->
 	FN = Dir ++  [$/|H],
 	case filelib:is_dir(FN) of
 	true ->														%% Get spec
-		Ext = filename:extension(H),
-		Base = filename:basename(H,Ext),
+		Base = easn:basename(H),
 		case file:consult(filename:join(FN, Base++".cfg")) of
 		{error, _} ->		scan_asn(T, Dir, Res);
 		{ok, [Asn|_]} ->	scan_asn(T, Dir, [Asn|Res])
