@@ -1,0 +1,1431 @@
+--ASN.1 Formal Description
+--SDP output CDR specification version 4.9
+
+SDPOUTPUTCDR {iso(1) member-body(2) bsi(826)
+disc(0) ericsson(1249) mobileDomain(0) charging(5)
+sDPOUTPUTCDR(1) asn1Module(0)}
+
+DEFINITIONS IMPLICIT TAGS ::=
+
+BEGIN
+
+SDPCallDataRecord ::= CHOICE {
+   cDRProcessed                 [1] CDRProcessed,
+   accountAdjustment            [2] AccountAdjustment,
+   negativeBalance              [3] NegativeBalance,
+   bonusAdjustment              [4] BonusAdjustment,
+   serviceFeeDeduction          [5] ServiceFeeDeduction,
+   lifeCycleChange              [6] LifeCycleChange,
+   negativeBalanceBarred        [7] NegativeBalanceBarred,
+   valueVoucherExpiry           [8] ValueVoucherExpiry,
+   periodicAdjustment           [9] PeriodicAdjustment,
+   periodicReset                [10] PeriodicReset,
+   temporaryBlock               [11] TemporaryBlock,
+   periodicAccountMgmt          [12] PeriodicAccountMgmt,
+   cdrFileControlBlock          [13] CDRFileControlBlock,
+   ...
+}
+
+CDRProcessed ::= SEQUENCE {
+   recordType                   [1] RecordType,
+   sdpID                        [2] NodeID,
+   cdrID                        [3] RecordSequenceNumberString,
+   originalCdrNodeID            [4] NodeID OPTIONAL,
+   originalCdrID                [5] RecordSequenceNumberString
+                                    OPTIONAL,
+   subscriberNumber             [6] SubscriberNumberString,
+   relatedNumber                [7] RelatedNumberString,
+   originalCdrTimeStamp         [8] TimeStamp OPTIONAL,
+   cDRProcessingTimeStamp       [9] TimeStamp,
+   balanceBeforeCDRProc         [10] MoneyAmount,
+   balanceAfterCDRProc          [11] MoneyAmount,
+   eventCost                    [12] MoneyAmount,
+   surplusDebit                 [13] MoneyAmount OPTIONAL,
+   familyAndFriendsIndicator    [14] FamilyAndFriendsIndicator
+                                     OPTIONAL,
+   serviceClassId               [15] ServiceClass,
+   currencyType                 [16] CurrencyType,
+   tempBlocked                  [17] BOOLEAN OPTIONAL,
+   accountNumber                [18] NumberString OPTIONAL,
+   accountGroupID               [19] AccountGroupID OPTIONAL,
+   serviceOfferings             [20] ServiceOfferings OPTIONAL,
+   selectedCommunityIndicator   [21] SelectedCommunityIndicator
+                                     OPTIONAL,
+   communityID1Charged          [22] CommunityID OPTIONAL,
+   communityID2Charged          [23] CommunityID OPTIONAL,
+   communityID3Charged          [24] CommunityID OPTIONAL,
+   communityID1NonCharged       [25] CommunityID OPTIONAL,
+   communityID2NonCharged       [26] CommunityID OPTIONAL,
+   communityID3NonCharged       [27] CommunityID OPTIONAL,
+   communityDataNonChargedNotAvailable
+                                [28] BOOLEAN OPTIONAL,
+   subscriberConvergent         [29] BOOLEAN OPTIONAL,
+   updatedAccumulatorID         [30] AccumulatorID OPTIONAL,
+   cdrProcDedicatedAccounts     [31] SEQUENCE (SIZE (1..255)) OF
+                                     CDRProcDedicatedAccount
+                                     OPTIONAL,
+   cdrProcAccumulators          [32] SEQUENCE (SIZE (1..255)) OF
+                                     CDRProcAccumulator
+                                     OPTIONAL,
+   categorizationInformation    [33] CategorizationInformation
+                                     OPTIONAL,
+   ratedDurations               [34] RatedDurations OPTIONAL,
+   individualPriceFactorHistory [35] SEQUENCE OF
+                                     IndividualPriceFactorHistory
+                                     OPTIONAL,
+   ...
+}
+
+AccountAdjustment ::= SEQUENCE {
+   adjustmentRecordType         [1] AdjustmentRecordType,
+   sdpID                        [2] NodeID,
+   cdrID                        [3] RecordSequenceNumberString,
+   accountNumber                [4] NumberString,
+   subscriberNumber             [5] NumberString,
+   adjustmentTimeStamp          [6] TimeStamp,
+   adjustmentAction             [7] AdjustmentAction OPTIONAL,
+   balanceBefore                [8] MoneyAmount OPTIONAL,
+   balanceAfter                 [9] MoneyAmount OPTIONAL,
+   adjustmentAmount             [10] MoneyAmount OPTIONAL,
+   serviceClassId               [11] ServiceClass,
+   currencyType                 [12] CurrencyType,
+   originalAdjustmentAmount     [13] MoneyAmount OPTIONAL,
+   originalCurrencyType         [14] CurrencyType OPTIONAL,
+   originNodeType               [15] NodeType OPTIONAL,
+   originNodeId                 [16] IDString OPTIONAL,
+   origTransactionID            [17] TransactionID OPTIONAL,
+   origTransactionTimeStamp     [18] TimeStamp OPTIONAL,
+   transactionType              [19] TransactionType OPTIONAL,
+   transactionCode              [20] TransactionCode OPTIONAL,
+   originOperatorId             [21] IDString OPTIONAL,
+   supervisionExpDateBefore     [22] Date OPTIONAL,
+   supervisionExpDateAfter      [23] Date OPTIONAL,
+   creditClearancePeriodBefore  [24] Period OPTIONAL,
+   creditClearancePeriodAfter   [25] Period OPTIONAL,
+   servFeeExpDateBefore         [26] Date OPTIONAL,
+   servFeeExpDateAfter          [27] Date OPTIONAL,
+   serviceRemovalPeriodBefore   [28] Period OPTIONAL,
+   serviceRemovalPeriodAfter    [29] Period OPTIONAL,
+   accountFlagsBefore           [30] AccountFlags OPTIONAL,
+   accountFlagsAfter            [31] AccountFlags OPTIONAL,
+   newServiceClass              [32] ServiceClass OPTIONAL,
+   valueVoucherExpDateBefore    [33] Date OPTIONAL,
+   valueVoucherExpDateAfter     [34] Date OPTIONAL,
+   temporaryServiceClassBefore  [35] ServiceClass OPTIONAL,
+   temporaryServiceClassAfter   [36] ServiceClass OPTIONAL,
+   activationDate               [37] Date OPTIONAL,
+   refillUnbarTimeStamp         [38] TimeStamp OPTIONAL,
+   oldLanguage                  [39] Language OPTIONAL,
+   newLanguage                  [40] Language OPTIONAL,
+   promotionPlanIDBefore        [41] PromotionPlan OPTIONAL,
+   promotionPlanIDAfter         [42] PromotionPlan OPTIONAL,
+   negativeBalanceBarringDate   [43] Date OPTIONAL,
+   oldAccountGroupID            [44] AccountGroupID OPTIONAL,
+   oldServiceOfferings          [45] ServiceOfferings OPTIONAL,
+   oldCommunityID1              [46] CommunityID OPTIONAL,
+   oldCommunityID2              [47] CommunityID OPTIONAL,
+   oldCommunityID3              [48] CommunityID OPTIONAL,
+   newAccountGroupID            [49] AccountGroupID OPTIONAL,
+   newServiceOfferings          [50] ServiceOfferings OPTIONAL,
+   subscriberConvergent         [51] BOOLEAN OPTIONAL,
+   newCommunityID1              [52] CommunityID OPTIONAL,
+   newCommunityID2              [53] CommunityID OPTIONAL,
+   newCommunityID3              [54] CommunityID OPTIONAL,
+   counterTypeID                [55] INTEGER OPTIONAL,
+   totalCounterStartValue       [56] CounterValue OPTIONAL,
+   totalCounterDeltaValue       [57] CounterDelta OPTIONAL,
+   periodCounterStartValue      [58] CounterValue OPTIONAL,
+   periodCounterDeltaValue      [59] CounterDelta OPTIONAL,
+   deductedAmount               [60] MoneyAmount OPTIONAL,
+   cost                         [61] MoneyAmount OPTIONAL,
+   costService                  [62] MoneyAmount OPTIONAL,
+   presentedCost                [63] MoneyAmount OPTIONAL,
+   chargingSuccessCode          [64] ChargingSuccessCode
+                                     OPTIONAL,
+   chargingIndicator            [65] INTEGER OPTIONAL,
+   familyAndFriendsAction       [66] FamilyAndFriendsAction
+                                     OPTIONAL,
+   familyAndFriendsNumber       [67] NumberString OPTIONAL,
+   familyAndFriendsIndicator    [68] FamilyAndFriendsIndicator
+                                     OPTIONAL,
+   owner                        [69] Owner OPTIONAL,
+   accountHomeRegion            [70] AccountHomeRegion OPTIONAL,
+   changedPIN                   [71] BOOLEAN OPTIONAL,
+   accountUnbarSuppressed       [72] BOOLEAN OPTIONAL,
+   adjustmentDedicatedAccounts  [73] SEQUENCE (SIZE (1..255)) OF
+                                     AdjustmentDedicatedAccount
+                                     OPTIONAL,
+   adjustmentAccumulators       [74] SEQUENCE (SIZE (1..255)) OF
+                                     AdjustmentAccumulator
+                                     OPTIONAL,
+   origServiceClassBefore       [75] ServiceClass OPTIONAL,
+   origServiceClassAfter        [76] ServiceClass OPTIONAL,
+   serviceSessionID             [77] UTF8String OPTIONAL,
+   duplicatingCDRNode           [78] NodeType OPTIONAL,
+   -- PC
+   aggregatedBalanceBefore      [79] MoneyAmount OPTIONAL,
+   aggregatedBalanceAfter       [80] MoneyAmount OPTIONAL,
+   adjustmentFaFs               [81] SEQUENCE OF
+                                     AdjustmentFaF
+                                     OPTIONAL,
+   -- PC end
+   adjustmentOffers             [82] SEQUENCE OF
+                                     AdjustmentOffer
+                                     OPTIONAL,
+   lastRecord                   [83] BOOLEAN OPTIONAL,
+   adjustmentPeriodicAccountMgmt [84] SEQUENCE OF
+                                      AdjustmentPeriodicAccountMgmt
+                                      OPTIONAL,
+   forAllSubscribersOnAccount   [85] BOOLEAN OPTIONAL,
+   adjustmentUsageCounters      [86] SEQUENCE OF
+                                     UsageCounter
+                                     OPTIONAL,
+   adjustmentUsageThresholds    [87] SEQUENCE OF
+                                     UsageThreshold
+                                     OPTIONAL,
+   modifiedSubscriberNumber     [88] NumberString OPTIONAL,
+   modifiedSubscriberNumberExpiryDate [89] Date OPTIONAL,
+   suppressedCost               [90] MoneyAmount OPTIONAL,
+   adjustmentTransactionType    [91] AdjustmentTransactionType OPTIONAL,
+   -- PC:10292
+   eocnSelectionIdBefore        [92] EocnSelectionId OPTIONAL,
+   eocnSelectionIdAfter         [93] EocnSelectionId OPTIONAL,
+   -- PC:10292 end 
+   ...
+}
+
+NegativeBalance ::= SEQUENCE {
+   accountNumber                [1] NumberString,
+   accountBalanceBefore         [2] MoneyAmount,
+   accountBalanceAfter          [3] MoneyAmount,
+   timeStamp                    [4] TimeStamp,
+   sdpID                        [5] NodeID OPTIONAL,
+   cdrID                        [6] RecordSequenceNumberString
+                                    OPTIONAL,
+   subscriberConvergent         [7] BOOLEAN OPTIONAL,
+   -- PC
+   aggregatedBalanceBefore      [8] MoneyAmount OPTIONAL,
+   aggregatedBalanceAfter       [9] MoneyAmount OPTIONAL,
+   aggregatedBalanceDedicatedAccounts
+                                [10] SEQUENCE (SIZE (1..255)) OF
+                                     AggregatedBalanceDedicatedAccount
+                                     OPTIONAL,
+   -- PC end
+   ...
+}
+
+BonusAdjustment ::= SEQUENCE {
+   sdpID                        [1] NodeID,
+   cdrID                        [2] RecordSequenceNumberString,
+   accountNumber                [3] NumberString,
+   subscriberNumber             [4] NumberString,
+   bonusTimeStamp               [5] TimeStamp,
+   currencyType                 [6] CurrencyType,
+   serviceClassId               [7] ServiceClass,
+   accountBalanceBeforeBonus    [8] MoneyAmount OPTIONAL,
+   accountBalanceAfterBonus     [9] MoneyAmount OPTIONAL,
+   bonusAmount                  [10] MoneyAmount OPTIONAL,
+   subscriberConvergent         [11] BOOLEAN OPTIONAL,
+   accountGroupID               [12] AccountGroupID OPTIONAL,
+   serviceOfferings             [13] ServiceOfferings OPTIONAL,
+   bonusDedicatedAccounts       [14] SEQUENCE (SIZE (1..255)) OF
+                                     BonusDedicatedAccount
+                                     OPTIONAL,
+   bonusAccumulators            [15] SEQUENCE (SIZE (1..255)) OF
+                                     BonusAccumulator
+                                     OPTIONAL,
+   lifeCycleInformation         [16] LifeCycleInformation OPTIONAL,
+   ...
+}
+
+ServiceFeeDeduction ::= SEQUENCE {
+   sdpID                        [1] NodeID,
+   cdrID                        [2] RecordSequenceNumberString,
+   originNodeType               [3] NodeType,
+   timeStamp                    [4] TimeStamp,
+   accountNumber                [5] NumberString,
+   serviceFeeAmount             [6] MoneyAmount,
+   successCode                  [7] ServFeeDeductSuccessCode,
+   oldServiceClass              [8] ServiceClass,
+   newServiceClass              [9] ServiceClass OPTIONAL,
+   currencyType                 [10] CurrencyType,
+   servFeeExpDateBefore         [11] Date OPTIONAL,
+   servFeeExpDateAfter          [12] Date OPTIONAL,
+   accountFlags                 [13] AccountFlags,
+   negativeBalanceBarringDate   [14] Date OPTIONAL,
+   balanceAfterDeduction        [15] MoneyAmount,
+   lastRecord                   [16] BOOLEAN OPTIONAL,
+   accountGroupID               [17] AccountGroupID OPTIONAL,
+   subscriberConvergent         [18] BOOLEAN OPTIONAL,
+   subscriberNumber             [19] NumberString OPTIONAL,
+   serviceFeeType               [20] ServiceFeeType OPTIONAL,
+   debt                         [21] MoneyAmount OPTIONAL,
+   subscriberFee                [22] MoneyAmount OPTIONAL,
+   clearedDedicatedAccounts     [23] SEQUENCE (SIZE (1..255)) OF
+                                     ClearedDedicatedAccount
+                                     OPTIONAL,
+   clearedAccumulators          [24] SEQUENCE (SIZE (1..255)) OF
+                                     ClearedAccumulator
+                                     OPTIONAL,
+   -- PC
+   aggregatedBalanceBefore      [25] MoneyAmount OPTIONAL,
+   aggregatedBalanceAfter       [26] MoneyAmount OPTIONAL,
+   aggregatedBalanceDedicatedAccounts
+                                [27] SEQUENCE (SIZE (1..255)) OF
+                                     AggregatedBalanceDedicatedAccount
+                                     OPTIONAL,
+   removedFaFs                  [28] SEQUENCE OF
+                                     RemovedFaF
+                                     OPTIONAL,
+   -- PC End
+   removedOffers                [29] SEQUENCE OF
+                                     RemovedOffer
+                                     OPTIONAL,
+   ignoredDebt                  [30] MoneyAmount OPTIONAL,
+   offerID                      [31] OfferID OPTIONAL,
+   offerExpiryDateBefore        [32] Date OPTIONAL,
+   offerExpiryDateAfter         [33] Date OPTIONAL,
+    -- PC:08865
+   adjustmentDedicatedAccounts  [34] SEQUENCE (SIZE (1..255)) OF
+                                     AdjustmentDedicatedAccount
+                                     OPTIONAL,
+   totalAmountDeducted          [35] MoneyAmount OPTIONAL,
+   maAmountDeducted             [36] MoneyAmount OPTIONAL,
+   deductionStatus              [37] SfeeFromDAReturnCode OPTIONAL,
+   -- PC:08865 end
+   removedUsageCounters         [38] SEQUENCE OF RemovedUsageCounter OPTIONAL,
+   ...
+}
+
+LifeCycleChange ::= SEQUENCE {
+   sdpID                        [1] NodeID,
+   cdrID                        [2] RecordSequenceNumberString,
+   originNodeType               [3] NodeType,
+   timeStamp                    [4] TimeStamp,
+   accountNumber                [5] NumberString,
+   subscriberNumber             [6] NumberString,
+   serviceClassId               [7] ServiceClass,
+   language                     [8] Language OPTIONAL,
+   currencyType                 [9] CurrencyType,
+   initialAmountAdded           [10] MoneyAmount OPTIONAL,
+   initialSupervisionExpDate    [11] Date OPTIONAL,
+   initialServiceFeeExpDate     [12] Date OPTIONAL,
+   supervisionExpDate           [13] Date OPTIONAL,
+   creditClearancePeriod        [14] Period OPTIONAL,
+   servFeeExpDate               [15] Date OPTIONAL,
+   serviceRemovalPeriod         [16] Period OPTIONAL,
+   clearedAccountValue          [17] MoneyAmount OPTIONAL,
+   accountFlagsBefore           [18] AccountFlags,
+   accountFlagsAfter            [19] AccountFlags,
+   activationDate               [20] Date OPTIONAL,
+   refillUnbarTimeStamp         [21] TimeStamp OPTIONAL,
+   iVRWelcomeStatus             [22] BOOLEAN OPTIONAL,
+   negativeBalanceBarringDate   [23] Date OPTIONAL,
+   promotionPlanID              [24] PromotionPlan OPTIONAL,
+   promotionPlanStartDate       [25] Date OPTIONAL,
+   promotionPlanEndDate         [26] Date OPTIONAL,
+   accumulatedRefillCounter     [27] INTEGER OPTIONAL,
+   accumulatedRefillValue       [28] MoneyAmount OPTIONAL,
+   accumulatedProgressionCounter
+                                [29] INTEGER OPTIONAL,
+   accumulatedProgressionValue  [30] MoneyAmount OPTIONAL,
+   preActReasonCode             [31] PreActReasonCode
+                                     OPTIONAL,
+   creditCleared                [32] BOOLEAN OPTIONAL,
+   serviceExpired               [33] BOOLEAN OPTIONAL,
+   originOperatorId             [34] IDString OPTIONAL,
+   originNodeId                 [35] IDString,
+   origTransactionID            [36] TransactionID OPTIONAL,
+   origTransactionTimeStamp     [37] TimeStamp OPTIONAL,
+   lastRecord                   [38] BOOLEAN OPTIONAL,
+   accountGroupID               [39] AccountGroupID OPTIONAL,
+   serviceOfferings             [40] ServiceOfferings OPTIONAL,
+   communityID1                 [41] CommunityID OPTIONAL,
+   communityID2                 [42] CommunityID OPTIONAL,
+   communityID3                 [43] CommunityID OPTIONAL,
+   subscriberConvergent         [44] BOOLEAN OPTIONAL,
+   initialCreditClearanceGracePeriod
+                                [45] Period OPTIONAL,
+   initialServiceRemovalGracePeriod
+                                [46] Period OPTIONAL,
+   subscriberCreated            [47] BOOLEAN OPTIONAL,
+   subscriberDeleted            [48] BOOLEAN OPTIONAL,
+   accountHomeRegion            [49] AccountHomeRegion OPTIONAL,
+   disconnectionCode            [50] DisconnectionCode OPTIONAL,
+   clearedDedicatedAccounts     [51] SEQUENCE (SIZE (1..255)) OF
+                                     ClearedDedicatedAccount
+                                     OPTIONAL,
+   creditClearedReasonMainAccount
+                                [52] Reason OPTIONAL,
+   -- PC
+   clearedAggregatedValue       [53] MoneyAmount OPTIONAL,
+   removedFaFs                  [54] SEQUENCE OF
+                                     RemovedFaF
+                                     OPTIONAL,
+   -- PC end
+   removedOffers                [55] SEQUENCE OF
+                                     RemovedOffer
+                                     OPTIONAL,
+   periodicAccountMgmtDataLCY   [56] SEQUENCE OF
+                                     PeriodicAccountMgmtDataLCY
+                                     OPTIONAL,
+   -- PC
+   balanceBefore                [57] MoneyAmount OPTIONAL,
+   balanceAfter                 [58] MoneyAmount OPTIONAL,
+   aggregatedBalanceBefore      [59] MoneyAmount OPTIONAL,
+   aggregatedBalanceAfter       [60] MoneyAmount OPTIONAL,
+   aggregatedBalanceDedicatedAccounts
+                                [61] SEQUENCE (SIZE (1..255)) OF
+                                AggregatedBalanceDedicatedAccount
+                                     OPTIONAL,
+   adjustmentDedicatedAccounts  [62] SEQUENCE (SIZE(1..255)) OF
+                                     AdjustmentDedicatedAccount
+                                     OPTIONAL,
+   adjustmentAccumulators       [63] SEQUENCE (SIZE(1..255)) OF
+                                     AdjustmentAccumulator 
+                                     OPTIONAL,
+   -- PC end
+   adjustmentOffers             [64] SEQUENCE OF
+                                     AdjustmentOffer
+                                     OPTIONAL,
+   adjustmentUsageCounters      [65] SEQUENCE OF
+                                     UsageCounter
+                                     OPTIONAL,
+   adjustmentUsageThresholds    [66] SEQUENCE OF
+                                     UsageThreshold
+                                     OPTIONAL,
+   -- PC:10292
+   eocnSelectionId 	            [67] EocnSelectionId OPTIONAL,
+   -- PC:10292 end
+   ...
+}
+
+NegativeBalanceBarred ::= SEQUENCE {
+   sdpID                        [1] NodeID,
+   cdrID                        [2] RecordSequenceNumberString,
+   accountNumber                [3] NumberString,
+   timeStamp                    [4] TimeStamp,
+   accountBalance               [5] MoneyAmount,
+   currencyType                 [6] CurrencyType,
+   lastRecord                   [7] BOOLEAN OPTIONAL,
+   subscriberConvergent         [8] BOOLEAN OPTIONAL,
+   -- PC
+   aggregatedBalance            [9] MoneyAmount OPTIONAL,
+   -- PC end
+   ...
+}
+
+ValueVoucherExpiry ::= SEQUENCE {
+   sdpID                        [1] NodeID,
+   cdrID                        [2] RecordSequenceNumberString,
+   accountNumber                [3] NumberString,
+   timeStamp                    [4] TimeStamp,
+   accountFlagsBefore           [5] AccountFlags OPTIONAL,
+   accountFlagsAfter            [6] AccountFlags OPTIONAL,
+   oldServiceClass              [7] ServiceClass,
+   newServiceClass              [8] ServiceClass,
+   negativeBalanceBarringDate   [9] Date OPTIONAL,
+   currencyType                 [10] CurrencyType,
+   valueVoucherExpDate          [11] Date,
+   lastRecord                   [12] BOOLEAN OPTIONAL,
+   subscriberConvergent         [13] BOOLEAN OPTIONAL,
+   clearedDedicatedAccounts     [14] SEQUENCE (SIZE (1..255)) OF
+                                     ClearedDedicatedAccount
+                                     OPTIONAL,
+   clearedAccumulators          [15] SEQUENCE (SIZE (1..255)) OF
+                                     ClearedAccumulator
+                                     OPTIONAL,
+   -- PC
+   aggregatedBalanceBefore      [16] MoneyAmount OPTIONAL,
+   aggregatedBalanceAfter       [17] MoneyAmount OPTIONAL,
+   removedFaFs                  [18] SEQUENCE OF
+                                     RemovedFaF
+                                     OPTIONAL,
+   -- PC end
+   removedOffers                [19] SEQUENCE OF
+                                     RemovedOffer
+                                     OPTIONAL,
+   removedUsageCounters         [20] SEQUENCE OF RemovedUsageCounter OPTIONAL,
+   ...
+}
+
+PeriodicAdjustment ::= SEQUENCE {
+   sdpID                        [1] NodeID,
+   cdrID                        [2] RecordSequenceNumberString,
+   timeStamp                    [3] TimeStamp,
+   accountNumber                [4] NumberString,
+   dedicatedAccountID           [5] DedicatedAccountID,
+   currencyType                 [6] CurrencyType,
+   lastRecord                   [7] BOOLEAN OPTIONAL,
+   replenishmentID              [8] ReplenishmentID,
+   rolloverNewPeriod            [9] MoneyAmount OPTIONAL,
+   rolloverOldPeriod            [10] MoneyAmount OPTIONAL,
+   replenishmentDate            [11] Date OPTIONAL,
+   replenishmentAmount          [12] MoneyAmount OPTIONAL,
+   oldReplenishmentAmount       [13] MoneyAmount OPTIONAL,
+   balanceBeforeAdjustment      [14] MoneyAmount OPTIONAL,
+   unusedRollover               [15] MoneyAmount OPTIONAL,
+   oldServiceClass              [16] ServiceClass OPTIONAL,
+   serviceClassId               [17] ServiceClass,
+   dedicatedAccountAdjustment   [18] MoneyAmount OPTIONAL,
+   dedicatedAccountClearance    [19] MoneyAmount OPTIONAL,
+   rolloverCalculationApplied   [20] BOOLEAN OPTIONAL,
+   periodOffset                 [21] INTEGER OPTIONAL,
+   startDate                    [22] Date OPTIONAL,
+   periodLength                 [23] INTEGER OPTIONAL,
+   typeOfPeriod                 [24] PeriodType OPTIONAL,
+   -- PC
+   aggrBalBeforeAdjustment      [25] MoneyAmount OPTIONAL,
+   dedicatedAccountRealMoney    [26] BOOLEAN OPTIONAL,
+   -- PC end
+   offerID                      [27] OfferID OPTIONAL,
+   accountUnitType              [28] AccountUnitType OPTIONAL,
+   dedicatedAccountAdjustmentUnit [29] MultiUnits OPTIONAL,
+   dedicatedAccountClearanceUnit  [30] MultiUnits OPTIONAL,
+   unitBalanceBeforeAdjustment    [31] MultiUnits OPTIONAL,
+   dedicatedAccountBalance        [32] MoneyAmount OPTIONAL,
+   unitDedicatedAccountBalance    [33] MultiUnits OPTIONAL,
+   ...
+}
+
+PeriodicReset ::= SEQUENCE {
+   sdpID                        [1] NodeID,
+   cdrID                        [2] RecordSequenceNumberString,
+   timeStamp                    [3] TimeStamp,
+   accountNumber                [4] NumberString,
+   currencyType                 [5] CurrencyType,
+   lastRecord                   [6] BOOLEAN OPTIONAL,
+   periodicResetID              [7] PeriodicResetID,
+   periodicResetDate            [8] Date OPTIONAL,
+   balanceAtStartOfNewPeriod    [9] MoneyAmount OPTIONAL,
+   balanceBeforeAdjustment      [10] MoneyAmount OPTIONAL,
+   oldServiceClass              [11] ServiceClass OPTIONAL,
+   serviceClassId               [12] ServiceClass,
+   periodOffset                 [13] INTEGER OPTIONAL,
+   startDate                    [14] Date OPTIONAL,
+   periodLength                 [15] INTEGER OPTIONAL,
+   typeOfPeriod                 [16] PeriodType OPTIONAL,
+   -- PC
+   aggrBalAtStartOfNewPeriod    [17] MoneyAmount OPTIONAL,
+   aggrBalBeforeAdjustment      [18] MoneyAmount OPTIONAL,
+   -- PC end
+   ...
+}
+
+TemporaryBlock ::= SEQUENCE {
+   sdpID                        [1] NodeID,
+   cdrID                        [2] RecordSequenceNumberString,
+   accountNumber                [3] NumberString,
+   subscriberNumber             [4] NumberString,
+   adjustmentTimeStamp          [5] TimeStamp,
+   originNodeType               [6] NodeType OPTIONAL,
+   originNodeID                 [7] IDString OPTIONAL,
+   origTransactionID            [8] TransactionID OPTIONAL,
+   origTransactionTimeStamp     [9] TimeStamp OPTIONAL,
+   transactionType              [10] TransactionType OPTIONAL,
+   transactionCode              [11] TransactionCode OPTIONAL,
+   originOperatorId             [12] IDString OPTIONAL,
+   temporaryBlockedStatusBefore [13] BOOLEAN OPTIONAL,
+   temporaryBlockedStatusAfter  [14] BOOLEAN OPTIONAL,
+   ...
+}
+
+PeriodicAccountMgmt ::= SEQUENCE {
+   sdpID                        [1] NodeID,
+   cdrID                        [2] RecordSequenceNumberString,
+   accountNumber                [3] NumberString,
+   subscriberNumber             [4] NumberString,
+   timeStamp                    [5] TimeStamp,
+   serviceClassId               [6] ServiceClass,
+   currencyType                 [7] CurrencyType,
+   originOperatorId             [8] IDString OPTIONAL,
+   originNodeType               [9] NodeType OPTIONAL,
+   originNodeID                 [10] IDString OPTIONAL,
+   origTransactionID            [11] TransactionID OPTIONAL,
+   origTransactionTimeStamp     [12] TimeStamp OPTIONAL,
+   transactionType              [13] TransactionType OPTIONAL,
+   transactionCode              [14] TransactionCode OPTIONAL,
+   pamEventType                 [15] PamEventType,
+   periodicAccountMgmtService   [16] SEQUENCE OF
+                                     PeriodicAccountMgmtService,
+   unchangedDedicatedAccounts   [17] SEQUENCE (SIZE (1..255)) OF
+                                     DedicatedAccountInfo
+                                     OPTIONAL,
+   unchangedAccumulators        [18] SEQUENCE (SIZE (1..255)) OF
+                                     AccumulatorInfo
+                                     OPTIONAL,
+   negativeBalanceBarringDate   [19] Date OPTIONAL,
+   accountFlagsBefore           [20] AccountFlags OPTIONAL,
+   accountFlagsAfter            [21] AccountFlags OPTIONAL,
+   unchangedUsageCounters       [22] SEQUENCE OF
+                                     UnchangedUsageCounter
+                                     OPTIONAL,
+   unchangedOffers              [23] SEQUENCE OF OfferInfo
+                                     OPTIONAL,
+   ...
+}
+
+CDRFileControlBlock ::= SEQUENCE {
+   cdrFileSequenceNumber        [1] Unsigned64,
+   sdpID                        [2] NodeID,
+   cdrFileTimeStamp             [3] TimeStamp,
+   cdrFileName                  [4] FileName,
+   ...
+}
+
+AccountFlags ::= IA5String (SIZE (8))
+
+AccountGroupID ::= INTEGER (0..2147483647)
+
+AccountHomeRegion ::= INTEGER (0..999)
+
+AccountUnitType ::= ENUMERATED {
+   time                         (0),
+   money                        (1),
+   totalOctets                  (2),
+   inputOctets                  (3),
+   outputOctets                 (4),
+   serviceSpecificUnits         (5),
+   volume                       (6),
+   ...
+}
+
+AccumulatorID ::= INTEGER (1..2147483647)
+
+AccumulatorInfo ::= SEQUENCE {
+   accumulatorID                [0] AccumulatorID,
+   accumulatorValue             [1] AccumulatorValue OPTIONAL,
+   accumulatorClearDate         [2] Date OPTIONAL,
+   ...
+}
+
+AccumulatorValue ::= INTEGER (-2147483648..2147483647)
+
+AdjustmentAction ::= ENUMERATED {
+   set                          (0),
+   add                          (1),
+   subtract                     (2),
+   reset                        (3),
+   remove                       (4),
+   create                       (5),
+   modify                       (6),
+   -- deleteThroughRequest      (7) reserved,
+   crop                         (8),
+   ...
+}
+
+AdjustmentAccumulator ::= SEQUENCE {
+   accumulatorID                [0] AccumulatorID,
+   accumulatorValueBefore       [1] AccumulatorValue OPTIONAL,
+   accumulatorValueAfter        [2] AccumulatorValue OPTIONAL,
+   accumulatorAdjustment        [3] AccumulatorValue OPTIONAL,
+   action                       [4] AdjustmentAction,
+   clearedAccumulatorValue      [5] AccumulatorValue OPTIONAL,
+   accumulatorClearDateBefore   [6] Date OPTIONAL,
+   accumulatorClearDateAfter    [7] Date OPTIONAL,
+   accumulatorValueInitial      [8] AccumulatorValue OPTIONAL,
+   accumulatorClearDateInitial  [9] Date OPTIONAL,
+   reason                       [10] Reason OPTIONAL,
+   ...
+}
+
+AdjustmentDedicatedAccount ::= SEQUENCE {
+   dedicatedAccountID           [0] DedicatedAccountID,
+   campaignIdentifier           [1] CampaignIdentifier OPTIONAL,
+   accountValueBefore           [2] MoneyAmount OPTIONAL,
+   accountValueAfter            [3] MoneyAmount OPTIONAL,
+   adjustmentAmount             [4] MoneyAmount OPTIONAL,
+   action                       [5] AdjustmentAction,
+   accountExpiryDateBefore      [6] Date OPTIONAL,
+   accountExpiryDateAfter       [7] Date OPTIONAL,
+   originalAdjustmentAmount     [8] MoneyAmount OPTIONAL,
+   clearedAccountValue          [9] MoneyAmount OPTIONAL,
+   accountValueInitial          [10] MoneyAmount OPTIONAL,
+   accountExpiryDateInitial     [11] Date OPTIONAL,
+   accountCreditClearedReason   [12] Reason OPTIONAL,
+   accountStartDateBefore       [13] Date OPTIONAL,
+   accountStartDateAfter        [14] Date OPTIONAL,
+   accountStartDateInitial      [15] Date OPTIONAL,
+   -- PC
+   realMoney                    [16] BOOLEAN OPTIONAL,
+   -- PC end
+   offerID                      [17] OfferID OPTIONAL,
+   accountUnitType              [18] AccountUnitType OPTIONAL,
+   adjustmentSubDedicatedAccounts
+                                [19] SEQUENCE OF
+                                     AdjustmentSubDedicatedAccount
+                                     OPTIONAL,
+   accountUnitBefore           [20] MultiUnits OPTIONAL,
+   accountUnitAfter            [21] MultiUnits OPTIONAL,
+   adjustmentUnit              [22] MultiUnits OPTIONAL,
+   clearedAccountUnit          [23] MultiUnits OPTIONAL,
+   accountUnitInitial          [24] MultiUnits OPTIONAL,
+   pamServiceID                [25] PamServiceID OPTIONAL,
+-- PC:09847
+   productID                   [26] ProductID OPTIONAL,
+-- PC:09847 end
+-- PC:10276  
+   offerExpiryDate             [27] Date OPTIONAL,
+   offerStartDate              [28] Date OPTIONAL,
+-- PC:10276 end  
+   ...
+}
+
+-- PC
+AdjustmentFaF ::= SEQUENCE {
+   familyAndFriendsNumber       [0] NumberString,
+   action                       [1] AdjustmentAction,
+   familyAndFriendsIndicator    [2] FamilyAndFriendsIndicator,
+   fafExpiryDateBefore          [3] Date OPTIONAL,
+   fafExpiryDateAfter           [4] Date OPTIONAL,
+   fafStartDateBefore           [5] Date OPTIONAL,
+   fafStartDateAfter            [6] Date OPTIONAL,
+   offerID                      [7] OfferID OPTIONAL,
+   reason                       [8] Reason OPTIONAL,
+   owner                        [9] Owner OPTIONAL,
+   ...
+}
+-- PC end
+
+AdjustmentOffer ::= SEQUENCE {
+   offerID                     [0] OfferID,
+   action                      [1] AdjustmentAction,
+   offerExpiryDateBefore       [2] Date OPTIONAL,
+   offerExpiryDateAfter        [3] Date OPTIONAL,
+   offerExpiryDateInitial      [4] Date OPTIONAL,
+   offerStartDateBefore        [5] Date OPTIONAL,
+   offerStartDateAfter         [6] Date OPTIONAL,
+   offerStartDateInitial       [7] Date OPTIONAL,
+   reason                      [8] Reason OPTIONAL,
+   offerType                   [9] OfferType OPTIONAL,
+   offerDisabledBefore         [10] BOOLEAN OPTIONAL,
+   offerDisabledAfter          [11] BOOLEAN OPTIONAL,
+   offerExpiryDateTimeBefore   [12] TimeStamp OPTIONAL,
+   offerExpiryDateTimeAfter    [13] TimeStamp OPTIONAL,
+   offerExpiryDateTimeInitial  [14] TimeStamp OPTIONAL,
+   offerStartDateTimeBefore    [15] TimeStamp OPTIONAL,
+   offerStartDateTimeAfter     [16] TimeStamp OPTIONAL,
+   offerStartDateTimeInitial   [17] TimeStamp OPTIONAL,
+   pamServiceID                [18] PamServiceID OPTIONAL,
+   offerProviderIDBefore       [19] NumberString OPTIONAL,
+   offerProviderIDAfter        [20] NumberString OPTIONAL,
+   productID                   [21] ProductID OPTIONAL,
+   -- PC:09985
+   offerAttributeChanges       [22] SEQUENCE OF AttributeChange OPTIONAL,
+   -- PC:09985 end
+   ...
+}
+
+AdjustmentPeriodicAccountMgmt ::= SEQUENCE {
+   pamServiceID                 [0] PamServiceID,
+   pamClassIDBefore             [1] PamClassID OPTIONAL,
+   pamClassIDAfter              [2] PamClassID OPTIONAL,
+   scheduleIDBefore             [3] ScheduleID OPTIONAL,
+   scheduleIDAfter              [4] ScheduleID OPTIONAL,
+   pamPeriodBefore              [5] PamPeriod OPTIONAL,
+   pamPeriodAfter               [6] PamPeriod OPTIONAL,
+   deferredToDateBefore         [7] Date OPTIONAL,
+   deferredToDateAfter          [8] Date OPTIONAL,
+   pamServicePriorityBefore     [9]  PamServicePriority OPTIONAL,
+   pamServicePriorityAfter      [10] PamServicePriority OPTIONAL,
+   ...
+}
+
+AdjustmentRecordType ::= ENUMERATED {
+   refillCDR                      (1),
+   notDefined                     (2),
+   linkageOfSubordinateSubscriber (3),
+   removalOfSubordinateSubscriber (4),
+   chargedEnquiry                 (5),
+   chargedServiceClassChange      (6),
+   notUsed                        (7),
+   changedFamilyAndFriendsList    (8),
+   clearedDedicatedAccount        (9),
+   premiumRefill                  (10),
+   provisioningUaDa               (11),
+   chargedCommunicationIdChange   (12),
+...
+}
+
+AdjustmentSubDedicatedAccount ::= SEQUENCE {
+   dedicatedAccountID              [0] DedicatedAccountID,
+   accountValueBefore              [1] MoneyAmount OPTIONAL,
+   accountValueAfter               [2] MoneyAmount OPTIONAL,
+   adjustmentAmount                [3] MoneyAmount OPTIONAL,
+   accountExpiryDateBefore         [4] Date OPTIONAL,
+   accountExpiryDateAfter          [5] Date OPTIONAL,
+   originalAdjustmentAmount        [6] MoneyAmount OPTIONAL,
+   clearedAccountValue             [7] MoneyAmount OPTIONAL,
+   accountValueInitial             [8] MoneyAmount OPTIONAL,
+   accountExpiryDateInitial        [9] Date OPTIONAL,
+   accountStartDateBefore          [10] Date OPTIONAL,
+   accountStartDateAfter           [11] Date OPTIONAL,
+   accountStartDateInitial         [12] Date OPTIONAL,
+   -- PC
+   mergedIntoDedicatedAccountID    [13] DedicatedAccountID OPTIONAL,
+   -- PC end
+   accountStartDate                [14] Date OPTIONAL,
+   accountExpiryDate               [15] Date OPTIONAL,
+   movedToOtherSubDedicatedAccount
+                                   [16] BOOLEAN OPTIONAL,
+   accountUnitBefore               [17] MultiUnits OPTIONAL,
+   accountUnitAfter                [18] MultiUnits OPTIONAL,
+   adjustmentUnit                  [19] MultiUnits OPTIONAL,
+   clearedAccountUnit              [20] MultiUnits OPTIONAL,
+   accountUnitInitial              [21] MultiUnits OPTIONAL,
+   ...
+}
+
+AdjustmentTransactionType ::= ENUMERATED {
+   refill           (1),
+   adjustment       (2),
+   offlinePromotion (3),
+...
+}
+
+-- PC
+AggregatedBalanceDedicatedAccount ::= SEQUENCE {
+   dedicatedAccountID          [0] DedicatedAccountID,
+   campaignIdentifier          [1] CampaignIdentifier OPTIONAL,
+   accountValueBefore          [2] MoneyAmount,
+   accountValueAfter           [3] MoneyAmount,
+   accountDeductedAmount       [4] MoneyAmount OPTIONAL,
+   offerID                     [5] OfferID OPTIONAL,
+   aggregatedBalanceSubDedicatedAccounts
+                               [6] SEQUENCE OF
+                           AggregatedBalanceSubDedicatedAccount
+                                   OPTIONAL,
+-- PC:10276  
+   offerExpiryDate             [7] Date OPTIONAL,
+   offerStartDate              [8] Date OPTIONAL,
+-- PC:10276 end  
+   ...
+}
+-- PC end
+
+-- PC
+AggregatedBalanceSubDedicatedAccount ::= SEQUENCE {
+   dedicatedAccountID           [0] DedicatedAccountID,
+   accountValueBefore           [1] MoneyAmount,
+   accountValueAfter            [2] MoneyAmount,
+   accountDeductedAmount        [3] MoneyAmount OPTIONAL,
+   ...
+}
+-- PC end
+
+BonusAccumulator ::= SEQUENCE {
+   accumulatorID                [0] AccumulatorID,
+   accumulatorValueBefore       [1] AccumulatorValue,
+   accumulatorValueAfter        [2] AccumulatorValue,
+   accumulatorDelta             [3] AccumulatorValue,
+   ...
+}
+
+BonusDedicatedAccount ::= SEQUENCE {
+   dedicatedAccountID           [0] DedicatedAccountID,
+   campaignIdentifier           [1] CampaignIdentifier OPTIONAL,
+   accountValueBefore           [2] MoneyAmount,
+   accountValueAfter            [3] MoneyAmount,
+   bonusAmount                  [4] MoneyAmount,
+   accountExpiryDateBefore      [5] Date OPTIONAL,
+   accountExpiryDateAfter       [6] Date OPTIONAL,
+   accountStartDateBefore       [7] Date OPTIONAL,
+   accountStartDateAfter        [8] Date OPTIONAL,
+   ...
+}
+
+CampaignIdentifier ::= INTEGER (1..99999999)
+
+CategoryValue ::= INTEGER (0..999)
+
+CategorizationInformation ::= SEQUENCE {
+   categoryType1                [1] CategoryValue OPTIONAL,
+   categoryType2                [2] CategoryValue OPTIONAL,
+   categoryType3                [3] CategoryValue OPTIONAL,
+   categoryType4                [4] CategoryValue OPTIONAL,
+   ...
+}
+
+CDRProcAccumulator ::= SEQUENCE {
+   accumulatorID                [0] AccumulatorID,
+   accumulatorValueBefore       [1] AccumulatorValue OPTIONAL,
+   accumulatorValueAfter        [2] AccumulatorValue OPTIONAL,
+   accumulatorDelta             [3] AccumulatorValue OPTIONAL,
+   ...
+}
+
+CDRProcDedicatedAccount ::= SEQUENCE {
+   dedicatedAccountID           [0] DedicatedAccountID,
+   campaignIdentifier           [1] CampaignIdentifier OPTIONAL,
+   accountValueBefore           [2] MoneyAmount,
+   accountValueAfter            [3] MoneyAmount,
+   chargedAmount                [4] MoneyAmount,
+   ...
+}
+
+ChangedPam	::= SEQUENCE {
+   pamClassIDBefore     [0] PamClassID OPTIONAL,
+   pamClassIDAfter      [1] PamClassID,
+   scheduleIDBefore     [2] ScheduleID OPTIONAL,
+   scheduleIDAfter      [3] ScheduleID,
+   pamPeriodBefore      [4] PamPeriod OPTIONAL,
+   pamPeriodUsed        [5] PamPeriod,
+   pamPeriodAfter       [6] PamPeriod,
+   deferredToDateBefore [7] Date OPTIONAL,
+   deferredToDateAfter  [8] Date OPTIONAL,
+   pamServicePriorityBefore
+                        [9]  PamServicePriority OPTIONAL,
+   pamServicePriorityAfter
+                        [10] PamServicePriority OPTIONAL,
+   ...
+}
+
+ChargingSuccessCode ::= ENUMERATED {
+   chargingSucceeded                  (0),
+   chargingPerformedAtDifferentCost   (1),
+   chargingPerformedPresentedCostLost (2),
+   chargingPerformedPartialDeduction  (3),
+   chargingFailed                     (4),
+   ...
+}
+
+ClearedAccumulator ::= SEQUENCE {
+   accumulatorID                [0] AccumulatorID,
+   clearedAccumulatorValue      [1] AccumulatorValue,
+   ...
+}
+
+ClearedDedicatedAccount ::= SEQUENCE {
+   dedicatedAccountID            [0] DedicatedAccountID,
+   campaignIdentifier            [1] CampaignIdentifier OPTIONAL,
+   clearedAccountValue           [2] MoneyAmount OPTIONAL,
+   accountCreditClearedReason    [3] Reason OPTIONAL,
+   accountExpiryDate             [4] Date OPTIONAL,
+   accountStartDate              [5] Date OPTIONAL,
+   -- PC
+   realMoney                     [6] BOOLEAN OPTIONAL,
+   -- PC end
+   offerID                       [7] OfferID OPTIONAL,
+   accountUnitType               [8] AccountUnitType OPTIONAL,
+   clearedSubDedicatedAccounts   [9] SEQUENCE OF
+                                     ClearedSubDedicatedAccount
+                                     OPTIONAL,
+   clearedAccountUnit            [10] MultiUnits OPTIONAL,
+   pamServiceID                  [11] PamServiceID OPTIONAL,
+-- PC:09847
+   productID                     [12] ProductID OPTIONAL,
+-- PC:09847 end
+-- PC:10276
+   offerExpiryDate               [13] Date OPTIONAL,
+   offerStartDate                [14] Date OPTIONAL,
+-- PC:10276 end 
+   ...
+}
+
+ClearedSubDedicatedAccount ::= SEQUENCE {
+   dedicatedAccountID           [0] DedicatedAccountID,
+   clearedAccountValue          [1] MoneyAmount OPTIONAL,
+   accountCreditClearedReason   [2] Reason OPTIONAL,
+   accountExpiryDate            [3] Date OPTIONAL,
+   accountStartDate             [4] Date OPTIONAL,
+   clearedAccountUnit           [5] MultiUnits OPTIONAL,
+   ...
+}
+
+CommunityID ::= INTEGER (0..9999999)
+-- 0            Undefined
+-- 1 - 9999999  CommunityID
+
+CounterDelta ::= INTEGER (-127..127)
+
+CounterValue ::= INTEGER (0..127)
+
+CurrencyType ::= INTEGER {local(0), euro(1)}
+
+Date ::= IA5String (SIZE (8))
+
+DedicatedAccountID ::= INTEGER (1..2147483647)
+
+DedicatedAccountInfo ::= SEQUENCE {
+   dedicatedAccountID           [0] DedicatedAccountID,
+   campaignIdentifier           [1] CampaignIdentifier OPTIONAL,
+   accountValue                 [2] MoneyAmount OPTIONAL,
+   accountExpiryDate            [3] Date OPTIONAL,
+   accountStartDate             [4] Date OPTIONAL,
+   -- PC
+   realMoney                    [5] BOOLEAN OPTIONAL,
+   -- PC end
+   offerID                      [6] OfferID OPTIONAL,
+   accountUnitType              [7] AccountUnitType OPTIONAL,
+   subDedicatedAccountsInfo     [8] SEQUENCE OF
+                                     SubDedicatedAccountInfo
+                                     OPTIONAL,
+   accountUnit                  [9] MultiUnits OPTIONAL,
+   pamServiceID                 [10] PamServiceID OPTIONAL,
+-- PC:09847
+   productID                     [11] ProductID OPTIONAL,
+-- PC:09847 end
+   ...
+}
+
+DisconnectionCode ::= INTEGER (0..255)
+-- 0        Service expired
+-- 1 - 255  Operator defined
+
+Duration ::= INTEGER (0..99999)
+
+-- PC:10292
+EocnSelectionId::= INTEGER (0..255)
+--PC:10292 end
+
+EvaluatedPam ::= SEQUENCE {
+   pamClassID           [0] PamClassID,
+   scheduleID           [1] ScheduleID,
+   pamPeriodUsed        [2] PamPeriod,
+   pamPeriodAfter       [3] PamPeriod OPTIONAL,
+   deferredToDateBefore [4] Date OPTIONAL,
+   deferredToDateAfter  [5] Date OPTIONAL,
+   pamServicePriority   [6] PamServicePriority OPTIONAL,
+   ...
+}
+
+FamilyAndFriendsAction ::= ENUMERATED {
+   set                                (0),
+   add                                (1),
+   delete                             (2),
+   ...
+}
+
+FamilyAndFriendsIndicator ::= INTEGER (1..65535)
+
+FileName ::= IA5String (SIZE(1..255))
+
+FloatingDecimal ::= SEQUENCE {
+   digits           [0] Integer64,
+   decimals         [1] Integer32,
+   ...
+}
+
+IDString ::= IA5String (SIZE (1..255))
+
+IndividualPriceFactorHistory ::= SEQUENCE {
+   individualPriceFactor  [0] Percent,
+   units                  [1] ServiceUnits,
+   ...
+}
+
+Integer32 ::= INTEGER (-2147483648..2147483647)
+
+Integer64 ::= INTEGER (-9223372036854775808..9223372036854775807)
+
+Language ::= INTEGER (1..4)
+
+LifeCycleInformation ::= SEQUENCE {
+   supervisionExpDateBefore    [0] Date OPTIONAL,
+   supervisionExpDateAfter     [1] Date OPTIONAL,
+   creditClearancePeriodBefore [2] Period OPTIONAL,
+   creditClearancePeriodAfter  [3] Period OPTIONAL,
+   servFeeExpDateBefore        [4] Date OPTIONAL,
+   servFeeExpDateAfter         [5] Date OPTIONAL,
+   serviceRemovalPeriodBefore  [6] Period OPTIONAL,
+   serviceRemovalPeriodAfter   [7] Period OPTIONAL,
+   accountFlagsBefore          [8] AccountFlags OPTIONAL,
+   accountFlagsAfter           [9] AccountFlags OPTIONAL,
+   ...
+}
+
+MonetaryUnits ::= SEQUENCE {
+   amount       [0] Integer64,
+   decimals     [1] Integer32,
+   currency     [2] Unsigned32
+}
+
+MoneyAmount ::= IA5String (SIZE (1..21))
+
+MultiUnits ::= Integer64
+
+NodeID ::= IA5String (SIZE (1..20))
+
+NodeType ::= IA5String (SIZE (1..8))
+
+NumberString ::= IA5String (SIZE (1..30))
+
+-- PC:09985
+AttributeChange ::= SEQUENCE {
+   attributeName         [0] UTF8String,
+   attributeAction       [1] AdjustmentAction,
+   attributeValueString  [2] UTF8String OPTIONAL,
+   ...
+}
+-- PC:09985 end
+
+OfferInfo ::= SEQUENCE {
+   offerID             [0] OfferID,
+   offerStartDate      [1] Date OPTIONAL,
+   offerExpiryDate     [2] Date OPTIONAL,
+   pamServiceID        [3] PamServiceID OPTIONAL,
+-- PC:09847 start
+   productID           [4] ProductID OPTIONAL,
+   offerStartDateTime  [5] TimeStamp OPTIONAL,
+   offerExpiryDateTime [6] TimeStamp OPTIONAL,
+-- PC:09847 end
+   ...
+}
+
+OfferID ::= INTEGER (1..2147483647)
+
+OfferType ::= ENUMERATED {
+   account (0),
+   multiUserIdentification (1),
+   timer (2),
+   providerAccount (3), 
+   sharedAccount (4), 
+   ...
+}
+
+Owner ::= ENUMERATED {
+   subscriber (1),
+   account (2),
+   ...
+}
+
+PamClassID ::= INTEGER (0..9999)
+
+PamEventData ::= CHOICE {
+   evaluatedPam   [0] EvaluatedPam,
+   changedPam     [1] ChangedPam,
+   ...
+}
+
+PamEventType ::= ENUMERATED {
+   userInitiatedEval (1),
+   pamInitiation (2),
+   pamChange (3),
+   pamDelete (4),
+   scheduled (5),
+   ...
+}
+
+PamIndicator ::= INTEGER (0..65535)
+
+PamPeriod ::= IA5String (SIZE (1..30))
+
+PamServiceID ::= INTEGER (0..99)
+
+PamServicePriority ::= INTEGER (0..65535)
+
+Percent ::= IA5String (SIZE (1..10))
+
+Period ::= INTEGER (0..1023)
+
+PeriodicAccountMgmtData ::= SEQUENCE {
+   pamServiceID                 [0] PamServiceID,
+   pamClassID                   [1] PamClassID,
+   scheduleID                   [2] ScheduleID,
+   currentPamPeriod             [3] PamPeriod,
+   pamServicePriority           [4] PamServicePriority OPTIONAL,
+   ...
+}
+
+PeriodicAccountMgmtDataLCY ::= SEQUENCE {
+   periodicAccountMgmtData    [0] PeriodicAccountMgmtData,
+   deferredToDate             [1] Date OPTIONAL,
+   lastEvaluationDate         [2] Date OPTIONAL,
+   ...
+}
+
+PeriodicAccountMgmtService ::= SEQUENCE {
+   pamServiceID                [0] PamServiceID,
+   pamEventData                [1] PamEventData,
+   lastEvaluationDate          [2] Date OPTIONAL,
+   pamIndicator                [3] PamIndicator OPTIONAL,
+   selectionTreeInfo           [4] SEQUENCE OF
+                                   SelectionTreeParameter,
+   balanceBefore               [5] MoneyAmount OPTIONAL,
+   balanceAfter                [6] MoneyAmount,
+   deltaAmount                 [7] MoneyAmount OPTIONAL,
+   oldAccountGroupID           [8] AccountGroupID OPTIONAL,
+   newAccountGroupID           [9] AccountGroupID OPTIONAL,
+   oldServiceOfferings         [10] ServiceOfferings OPTIONAL,
+   newServiceOfferings         [11] ServiceOfferings OPTIONAL,
+   adjustmentDedicatedAccounts [12] SEQUENCE (SIZE(1..255)) OF
+                                    AdjustmentDedicatedAccount
+                                    OPTIONAL,
+   adjustmentAccumulators      [13] SEQUENCE (SIZE(1..255)) OF
+                                    AdjustmentAccumulator OPTIONAL,
+   treeDefinedFields           [14] SEQUENCE OF TreeDefinedField
+                                    OPTIONAL,
+   lifeCycleInformation        [15] LifeCycleInformation
+                                    OPTIONAL,
+    -- PC
+   aggregatedBalanceBefore     [16] MoneyAmount OPTIONAL,
+   aggregatedBalanceAfter      [17] MoneyAmount OPTIONAL,
+   -- PC end
+   forAllSubscribersOnAccount  [18] BOOLEAN OPTIONAL,
+   adjustmentUsageCounters     [19] SEQUENCE OF
+                                    UsageCounter
+                                    OPTIONAL,
+   adjustmentOffers            [20] SEQUENCE OF
+                                    AdjustmentOffer
+                                    OPTIONAL,
+   -- PC:09858
+   oldCommunityID1             [21] CommunityID OPTIONAL,
+   oldCommunityID2             [22] CommunityID OPTIONAL,
+   oldCommunityID3             [23] CommunityID OPTIONAL,
+   newCommunityID1             [24] CommunityID OPTIONAL,
+   newCommunityID2             [25] CommunityID OPTIONAL,
+   newCommunityID3             [26] CommunityID OPTIONAL,
+   -- PC:09858 end
+   -- PC:09853
+   oldServiceClass             [27] ServiceClass OPTIONAL,
+   newServiceClass             [28] ServiceClass OPTIONAL,
+   -- PC:09853 end
+   ...
+}
+
+PeriodicResetID ::= INTEGER (0..255)
+
+PeriodType ::= INTEGER {day(0), month(1)}
+
+PreActReasonCode ::= ENUMERATED {
+   origInsideHPLMN                    (0),
+   origOutsideHPLMNwithCAPv1          (1),
+   origOutsideHPLMNwithCAPv2          (2),
+   uSSDCallBack                       (3),
+   origOutsideHPLMNwithCAPv3          (4),
+   firstIVRcall                       (5),
+   firstUSSDaccess                    (6),
+   firstExpiryDateSet                 (7),
+   ...
+}
+
+ProductID ::= INTEGER (1..2147483647)
+
+PromotionPlan ::= IA5String (SIZE (1..4))
+
+RatedDurations ::= SEQUENCE {
+   debitDuration                [0] Duration OPTIONAL,
+   creditDuration               [1] Duration OPTIONAL,
+   freeDuration                 [2] Duration OPTIONAL,
+   ...
+}
+
+Reason ::= ENUMERATED {
+   serviceClassChange                 (1),
+   subscriberDeleted                  (2),
+   creditClearancePeriodExpired       (3),
+   dedicatedAccountExpired            (4),
+   other                              (5),
+   subDedicatedAccountExpired         (6),
+   offerExpired                       (7),
+   -- PC
+   fafExpired                         (8),
+   -- PC end
+   userInitiatedRequest               (9),
+   ...
+}
+
+RecordSequenceNumberString ::= IA5String (SIZE (1..20))
+
+RecordType ::= ENUMERATED {
+   mobileOriginating                  (1),
+   mobileTerminating                  (2),
+   callForwarding                     (3),
+   mobileOriginatingSMSinSMSC         (4),
+   mobileTerminatingSMSinSMSC         (5),
+   gprsCDR                            (6),
+   mobileOriginatingSMSinGPRS         (7),
+   mobileTerminatingSMSinGPRS         (8),
+   chargeEventCDR                     (10),
+   ...
+}
+
+RelatedNumberString ::= IA5String (SIZE (0..63))
+
+-- PC
+RemovedFaF ::= SEQUENCE {
+   familyAndFriendsNumber       [0] NumberString,
+   familyAndFriendsIndicator    [1] FamilyAndFriendsIndicator,
+   fafExpiryDate                [2] Date OPTIONAL,
+   fafStartDate                 [3] Date OPTIONAL,
+   offerID                      [4] OfferID OPTIONAL,
+   reason                       [5] Reason OPTIONAL,
+   owner                        [6] Owner OPTIONAL,
+   ...
+}
+-- PC end
+
+RemovedOffer ::= SEQUENCE {
+   offerID                   [0] OfferID,
+   offerExpiryDate           [1] Date OPTIONAL,
+   offerStartDate            [2] Date OPTIONAL,
+   reason                    [3] Reason OPTIONAL,
+   offerType                 [4] OfferType OPTIONAL,
+   offerDisabled             [5] BOOLEAN OPTIONAL, 
+   offerExpiryDateTime       [6] TimeStamp OPTIONAL, 
+   offerStartDateTime        [7] TimeStamp OPTIONAL, 
+   pamServiceID              [8] PamServiceID OPTIONAL,
+   offerProviderID           [9] NumberString OPTIONAL, 
+   productID                 [10] ProductID OPTIONAL,
+   -- PC:09985
+   offerAttributeChanges     [11] SEQUENCE OF AttributeChange OPTIONAL,
+   -- PC:09985 end
+   ...
+}
+
+RemovedUsageCounter ::= SEQUENCE {
+   usageCounterID                 [0] UsageCounterID,
+   usageCounterValue              [1] UsageCounterType OPTIONAL,
+   associatedPartyID              [2] NumberString OPTIONAL,
+   productID                      [3] ProductID OPTIONAL, 
+   ...
+}
+
+ReplenishmentID ::= INTEGER (0..255)
+
+ScheduleID ::= INTEGER (0..9999)
+
+SelectedCommunityIndicator ::= INTEGER (0..9999999)
+
+SelectionTreeParameter ::= SEQUENCE {
+   selectionTreeID       [0] UTF8String,
+   selectionTreeVersion  [1] UTF8String,
+   selectionTreeType     [2] SelectionTreeType,
+   ...
+}
+
+SelectionTreeType ::= ENUMERATED {
+   rating                    (0),
+   bonus                     (1),
+   selection                 (2),
+   dedicatedAccount          (3),
+   communityCharging         (4),
+   numberNormalization       (5),
+   ussdTextMessage           (6),
+   accountManagement         (7),
+   preAnalysis               (8),
+   periodicAccountManagement (9),
+   ...
+}
+
+ServFeeDeductSuccessCode ::= ENUMERATED {
+   ok                                       (1),
+   okServiceExpired                         (2),
+   okServiceClassChange                     (3),
+   okNoAction                               (4),
+   nokServiceClassChange                    (5),
+   okFirstDeductionSuppressed               (6),
+   okServiceDeactivated                     (7),
+   serviceFeeTypeDisconnectedDebtCleared    (8),
+   partialDeductionWhenAccumulatedDeduction (9),
+   okOfferExpired                           (10),  
+   ...
+}
+
+ServiceClass ::= INTEGER (0..9999)
+
+ServiceFeeType ::= IA5String (SIZE (1..10))
+
+ServiceOfferings ::= INTEGER (0..2147483647)
+
+ServiceUnits ::= SEQUENCE {
+   timeUnit            [1] Unsigned32 OPTIONAL,
+   moneyUnit           [2] MonetaryUnits OPTIONAL,
+   totalOctetsUnit     [3] Unsigned64 OPTIONAL,
+   uplinkOctetsUnit    [4] Unsigned64 OPTIONAL,
+   downlinkOctetsUnit  [5] Unsigned64 OPTIONAL,
+   serviceSpecificUnit [6] Unsigned64 OPTIONAL,
+   ...
+}
+
+-- PC:08865
+SfeeFromDAReturnCode ::= ENUMERATED {
+   nokUDA   (1),
+   nokXDA   (2),
+   okEMnDA  (3),
+   okXMnDA  (4),
+   okDA     (5),
+   okMnDA   (6),
+   ...
+}
+-- PC:08865 end
+
+SubDedicatedAccountInfo ::= SEQUENCE {
+   dedicatedAccountID           [0] DedicatedAccountID,
+   accountValue                 [1] MoneyAmount OPTIONAL,
+   accountExpiryDate            [2] Date OPTIONAL,
+   accountStartDate             [3] Date OPTIONAL,
+   accountUnit                  [4] MultiUnits OPTIONAL,
+   ...
+}
+
+SubscriberNumberString ::= IA5String (SIZE (0..30))
+
+TimeStamp ::= IA5String (SIZE (19))
+
+TransactionCode ::= IA5String (SIZE (1..30))
+
+TransactionID ::= IA5String (SIZE (1..20))
+
+TransactionType ::= IA5String (SIZE (1..30))
+
+TreeDefinedField ::= SEQUENCE {
+   parameterID      [0] UTF8String,
+   parameterValue   [1] TreeDefinedFieldType
+}
+
+TreeDefinedFieldType ::= CHOICE {
+   boolean            [0] BOOLEAN,
+   integer64          [2] Integer64,
+   date               [6] Date,
+   string             [7] UTF8String,
+   floatingDecimalTDF [8] FloatingDecimal,
+   amountTDF          [9] MonetaryUnits,
+   ...
+}
+
+UnchangedUsageCounter ::= SEQUENCE {
+   usageCounterID                 [0] UsageCounterID,
+   usageCounterValue              [1] UsageCounterType OPTIONAL,
+   associatedPartyID              [2] NumberString OPTIONAL, 
+-- PC:09847 start
+   productID                      [3] ProductID OPTIONAL,
+-- PC:09847 end
+   ...
+}
+
+Unsigned32 ::= INTEGER (0..4294967295)
+
+Unsigned64 ::= INTEGER (0..18446744073709551615)
+
+UsageCounter ::= SEQUENCE {
+   usageCounterID                 [0] UsageCounterID,
+   action                         [1] AdjustmentAction OPTIONAL,
+   usageCounterValueBefore        [2] UsageCounterType OPTIONAL,
+   usageCounterValueAfter         [3] UsageCounterType OPTIONAL,
+   usageCounterChange             [4] UsageCounterType OPTIONAL,
+   associatedPartyID              [5] NumberString OPTIONAL, 
+   productID                      [6] ProductID OPTIONAL,
+   ...
+}
+
+UsageCounterID ::= INTEGER (1..2147483647)
+
+UsageCounterType ::= CHOICE {
+   usageCounterUnit    [0] Unsigned64,
+   usageCounterMoney   [1] FloatingDecimal,
+   ...
+}
+
+UsageThreshold ::= SEQUENCE {
+   usageThresholdID             [0] UsageThresholdID,
+   action                       [1] AdjustmentAction OPTIONAL,
+   usageThresholdValueBefore    [2] UsageCounterType OPTIONAL,
+   usageThresholdValueAfter     [3] UsageCounterType OPTIONAL,
+   associatedPartyID            [4] NumberString OPTIONAL,  
+   ...
+}
+
+UsageThresholdID ::= INTEGER (1..2147483647)
+
+END

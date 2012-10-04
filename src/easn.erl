@@ -75,7 +75,8 @@ loop() ->
 	{compile, Pid, Asn} ->
 		Pid ! {compile_done, compile(Asn, Pid)},
 		loop();
-	{retrieve, Pid, Asn} ->
+	{retrieve_asn, Pid, Asn} ->
+		io:format("Retrieving ASN",[]),
 		Pid ! {asn_spec, retrieveASN(Asn)},
 		loop();
 	{close} ->
@@ -84,8 +85,8 @@ loop() ->
 	{status, _Reply, Msg} ->
 		io:format("~s",[Msg]),
 		loop();
-	{compile_done, FN, Spec} ->
-		self() ! {parse, self(), [], {FN, Spec}},
+	{compile_done, FN, Asn} ->
+		self() ! {parse, self(), [], {FN, Asn#asn.spec}},
 		loop();
 	{parse_result, _Data, Asn, _Xml} ->
 		io:format("~s",[Asn]),
@@ -107,13 +108,13 @@ loop() ->
 %% FN   - File to decode
 %% Asn - ASN.1 Specification details {codec module, root tag}
 %%
-parse(FN, Asn, Pid) ->
+parse(FN, Asn_spec, Pid) ->
 	case filelib:is_regular(FN) of
 	  true ->
 		%% Parse File
 		{ok, Bytes} = file:read_file(FN),
 		Pid ! {hex, to_hex(Bytes,0,[])},
-		parse_asn(Asn#asn.spec, 1, Bytes, Pid);								
+		parse_asn(Asn_spec, 1, Bytes, Pid);								
 	  false ->
 		Pid ! {error, io_lib:format("~s does not exist",[FN])}
 	end.
@@ -247,8 +248,8 @@ write_asn_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SET' -> 	%% H
 	 [write_asn_comp(T, Components, Indent+1, DB) |
 	 [io_lib:format("~s}~n",[indent(Indent)])]]];
 write_asn_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='CHOICE' -> %% Handle CHOICE type
-	%io_lib:format("N: ~p~nD: ~p~nH: ~p~nT: ~p~n",[Name, Def,H,T]),
-	Type = getChoice(element(1, element(2, Def)), H),			%% Get spec of actual element
+	%io:format("N: ~p~nD: ~p~nH: ~p~nT: ~p~n",[Name, Def,H,T]),
+	Type = getChoice(element(2, Def), H),			%% Get spec of actual element
 	D1 = Type#type.def,											%% Type of element
 	[Record] = T,
 	Data = to_list(Record),
@@ -283,7 +284,8 @@ write_asn_type(Data, _, Def, Indent, DB) when is_tuple(Def),
 %	 [write_asn_type(T, [], Def, Indent, DB)]];	
 write_asn_type(Data, Comp, Def, Indent, DB) when is_tuple(Def), 
 										 element(1, Def)=='SEQUENCE OF' ->
-	[{'CONTEXT', Tag} | _] = Comp#'ComponentType'.tags,
+	%io:format("Comp: ~p~n", [Comp]),
+	Tag = get_tag(Comp#'ComponentType'.tags),
 	%% Look-ahead for child definition
 	Type = element(2, Def),
 	D1 = Type#type.def,
@@ -298,16 +300,16 @@ write_asn_type(Data, Comp, Def, Indent, DB) when is_tuple(Def),
 		io_lib:format("Def: ~p~n",[D1])
 	end;
 write_asn_type(Data, Comp, Def, Indent, _) when Def == 'OCTET STRING' -> 
-	[{'CONTEXT', Tag} | _] = Comp#'ComponentType'.tags,
+	Tag = get_tag(Comp#'ComponentType'.tags),
 	D1 = [io_lib:format("~2.16.0B", [X]) || X <- Data],
 	Name = [indent(Indent) | atom_to_list(Comp#'ComponentType'.name)],
 	io_lib:format( "~50.49s [~2.10.0B] ~s~n",[Name, Tag, D1]);
 write_asn_type(Data, Comp, _, Indent, _) when is_binary(Data) -> 	
-	[{'CONTEXT', Tag} | _] = Comp#'ComponentType'.tags,
+	Tag = get_tag(Comp#'ComponentType'.tags),
 	Name = [indent(Indent) | atom_to_list(Comp#'ComponentType'.name)],
 	io_lib:format( "~50.49s [~2.10.0B] ~p~n",[Name, Tag, binary_to_list(Data)]);	
 write_asn_type(Data, Comp, _, Indent, _)  -> 	
-	[{'CONTEXT', Tag} | _] = Comp#'ComponentType'.tags,
+	Tag = get_tag(Comp#'ComponentType'.tags),
 	Name = [indent(Indent) | atom_to_list(Comp#'ComponentType'.name)],
 	io_lib:format( "~50.49s [~2.10.0B] ~p~n",[Name, Tag, Data]).
 	 
@@ -343,8 +345,8 @@ write_xml_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SET' -> 	%% H
 	 [write_xml_comp(T, Components, Indent+1, DB) |
 	 [io_lib:format("~s</~s>~n",[indent(Indent),Name])]]];
 write_xml_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='CHOICE' -> %% Handle CHOICE type
-	%io_lib:format("N: ~p~nD: ~p~nH: ~p~nT: ~p~n",[Name, Def,H,T]),
-	Type = getChoice(element(1, element(2, Def)), H),			%% Get spec of actual element
+	%io:format("N: ~p~nD: ~p~nH: ~p~nT: ~p~n",[Name, Def,H,T]),
+	Type = getChoice(element(2, Def), H),						%% Get spec of actual element
 	D1 = Type#type.def,											%% Type of element
 	[Record] = T,
 	Data = to_list(Record),
@@ -456,11 +458,16 @@ getDefinition([H|T], Comp) ->
 getDefinition([], _) ->
 	[].
 		
+getChoice(Def, Name) when is_tuple(Def) ->
+	getChoice(element(1, Def), Name);
 getChoice([], _) -> [];
 getChoice([H|_], Name) when element(1,H) == 'ComponentType',
 							H#'ComponentType'.name == Name ->
 	H#'ComponentType'.typespec;
 getChoice([_|T], Name) -> getChoice(T, Name).
+
+get_tag([{'CONTEXT', Tag} | _]) -> Tag;
+get_tag(_Other) -> 0.
 
 %%
 %% Compiled ASN.1 files have no version information included, but it is needed
@@ -503,26 +510,25 @@ storeASN(Asn) ->
 	file:write_file(C, io_lib:format("~p.~n",[A1])),
 	%% Replace DB filenames with ETS references
 	DB = get_db_ref(Files, Src, []),
-	A1#asn.spec#asn_spec{db=DB}.
+	A1#asn{spec=Asn#asn.spec#asn_spec{db=DB}}.
 
 %%
 %% Retrieve asn.1 specification
 %%
 retrieveASN(Asn) ->
 	%% Extract specification filename without path & extension
-	io:format("~p~n",[Asn]),
     Base = basename(Asn#asn.file),
 	Dest = filename:dirname(code:which(?MODULE)),
 	Src = asn_dir(Dest, Base, Asn#asn.version, Asn#asn.enc),
-	io:format("  Src: ~s~n Dest: ~s~n  Cfg: ~s~n",[Src,Dest,filename:join([Src, Base++".cfg"])]),
 	%% Copy compiled asn.1 files
 	B = Base++".beam",
 	file:copy(filename:join([Src, B]), filename:join([Dest, B])),
 	%% Get config
-	{ok, [Asn]} = file:consult(filename:join([Src, Base++".cfg"])),
+	io:format("~p~n",[filename:join([Src, Base++".cfg"])]),
+	{ok, [Asn|_]} = file:consult(filename:join([Src, Base++".cfg"])),
 	%% Replace DB filenames with ETS references
 	DB = get_db_ref(Asn#asn.spec#asn_spec.db, Src, []),
-	Asn#asn.spec#asn_spec{db=DB}.
+	Asn#asn{spec=Asn#asn.spec#asn_spec{db=DB}}.
 
 asn_dir(Dir, Base, Version, Enc) ->
 	[Dir | ["/../asn/" |[Base | [$. |[remove(Version,$.) | [$. |[atom_to_list(Enc)]]]]]]].

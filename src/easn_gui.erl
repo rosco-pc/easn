@@ -68,14 +68,14 @@ start(Pid) ->
 			[{_F,A}|_] -> wxComboBox:findString(Chooser, A#asn.title)
 			end, 
 	wxComboBox:setSelection(Chooser, Index),
-	Data = wxComboBox:getClientData(Chooser, Index),
-	Pid ! {retrieve, self(), Data},								%% Make sure that all files are in place
-																%% and get the correct DB references
+	Asn1 = easn:retrieveASN(wxComboBox:getClientData(Chooser, Index)),	%% Make sure that all files are in place
+																	%% and get the correct DB references
+	io:format("ASN: ~p~n",[Asn1]),
 	%% Add recent file to menu
 	add_recent(Recent, Config#config.files),
 	
 	wxFrame:show(Frame),										%% Show frame
-	loop(#state{window=W,parse=Pid,asn=Asn}),					%% Handle GUI events
+	loop(#state{window=W,parse=Pid,asn=Asn1}),					%% Handle GUI events
 	io:format("Close wx~n",[]),
     wx:destroy(),												%% Exit.
 	Pid ! {close}.
@@ -126,6 +126,7 @@ loop(State) ->
 		loop(State#state{asn=Asn});
 	%% Retrieved ASN data (and files put in place)
 	{asn_spec, _State, Asn} ->
+		io:format("Update ASN: ~p~n",[Asn]),
 		loop(State#state{asn=Asn});
 	%% Status message
 	{status, _State, Msg} ->
@@ -225,6 +226,7 @@ add_recent(Recent, Files) ->
 %% Handle commands
     
 handle_cmd(_, ?wxID_OPEN, State) ->
+	io:format("Open file: ~p~n",[State]),
 	Frame = State#state.window#window.frame,
     FD = wxFileDialog:new(Frame,[{style, ?wxFD_OPEN bor ?wxFD_FILE_MUST_EXIST}]),
     case wxDialog:showModal(FD) of
