@@ -70,7 +70,6 @@ start(Pid) ->
 	wxComboBox:setSelection(Chooser, Index),
 	Asn1 = easn:retrieveASN(wxComboBox:getClientData(Chooser, Index)),	%% Make sure that all files are in place
 																	%% and get the correct DB references
-	io:format("ASN: ~p~n",[Asn1]),
 	%% Add recent file to menu
 	add_recent(Recent, Config#config.files),
 	
@@ -86,9 +85,11 @@ rc_dir(File) ->
 
 %% Main event loop
 loop(State) ->
+	io:format("waiting for event~n"),
     receive 
     %% Handle window acions
 	#wx{id=Id, event=#wxCommand{}} ->
+		io:format("  Got ~p (~s)~n",[Id, get(Id)]),
 	    loop(handle_cmd(get(Id), Id, State));
 	%% Close Application
 	#wx{event=#wxClose{}} ->
@@ -97,19 +98,19 @@ loop(State) ->
 	    ok;
 	%% Handle response to view_asn request
 	%% Parsing Encoded file done
-	{parse_result, Data} ->
-		io:format("Partial result: ~p~n",[Data]),
+	{parse_result, Res} ->
+		io:format("  Got partial result",[]),
 		Asn = State#state.window#window.asn,
-		A1 = wxTextCtrl:getInsertPoint(Asn),
-		wxTextCtrl:appendText(Asn, easn:pp(Data)),
-		A2 = wxTextCtrl:getInsertPoint(Asn),
-		Xml = State#state.window#window.asn,
-		X1 = wxTextCtrl:getInsertPoint(Xml),
-		wxTextCtrl:appendText(Xml, easn:to_xml(Data)),
-		X2 = wxTextCtrl:getInsertPoint(Xml),
-		%addComponent(State#state.window#window.comp, Data#result{asn={A1, A2},xml={X1, X2}}),
+		A1 = wxTextCtrl:getInsertionPoint(Asn),					%% Start of ASN section
+		wxTextCtrl:appendText(Asn, ASN),
+		A2 = wxTextCtrl:getInsertionPoint(Asn),					%% End fo ASN section
+		Xml = State#state.window#window.xml,
+		X1 = wxTextCtrl:getInsertionPoint(Xml),					%% Start of XML section
+		wxTextCtrl:appendText(Xml, XML),
+		X2 = wxTextCtrl:getInsertionPoint(Xml),					%% Start of XML section
+		%addComponent(State#state.window#window.comp, #result{asn={A1, A2},xml={X1, X2}}),
 		loop(State);
-	{parse_done, State, Msg} ->
+	{parse_done, {ok, Count} ->
 		Out = State#state.window#window.info,
 		wxTextCtrl:appendText(Out, Msg),
 		loop(State);
@@ -124,9 +125,14 @@ loop(State) ->
 		wxComboBox:setSelection(Chooser, wxComboBox:append(Chooser, Title, Asn)),
 		%% Update State and continue
 		loop(State#state{asn=Asn});
+	{hex, Data} ->
+		io:format("  Got hexview~n",[]),
+		Out = State#state.window#window.hex,
+		wxTextCtrl:appendText(Out, Data),
+		loop(State);
 	%% Retrieved ASN data (and files put in place)
 	{asn_spec, _State, Asn} ->
-		io:format("Update ASN: ~p~n",[Asn]),
+		io:format("  Update ASN: ~p~n",[Asn]),
 		loop(State#state{asn=Asn});
 	%% Status message
 	{status, _State, Msg} ->
@@ -139,8 +145,11 @@ loop(State) ->
 		wxTextCtrl:appendText(Out, Msg),
 		loop(State);
 	Ev = #wx{} ->
-	    io:format("Got ~p ~n", [Ev]),
-	    loop(State)
+	    io:format("  Got wxEvent: ~p ~n", [Ev]),
+	    loop(State);
+	Ev ->
+		io:format("  Got ~p~n", [Ev]),
+		loop(State)
     end.
 
 %% asn_dialog event loop
@@ -226,17 +235,18 @@ add_recent(Recent, Files) ->
 %% Handle commands
     
 handle_cmd(_, ?wxID_OPEN, State) ->
-	io:format("Open file: ~p~n",[State]),
+	io:format("Select file: ",[State]),
 	Frame = State#state.window#window.frame,
     FD = wxFileDialog:new(Frame,[{style, ?wxFD_OPEN bor ?wxFD_FILE_MUST_EXIST}]),
-    case wxDialog:showModal(FD) of
+    S1 = case wxDialog:showModal(FD) of
 	?wxID_OK ->
 		FN = wxFileDialog:getPath(FD),
-		State#state.parse ! {parse, self(), {FN, State#state.asn#asn.spec}},
-		S1 = State#state{file=FN};
+		io:format("~s~n",[FN]),
+		State#state.parse ! {parse, {FN, State#state.asn}},
+		State#state{file=FN};
 	_ ->
-		io:format("No file selected~n"),
-	    S1 = State
+		io:format("-~n"),
+	    State
     end,
     wxFileDialog:destroy(FD),
     S1;

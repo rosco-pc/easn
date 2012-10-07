@@ -10,6 +10,8 @@ SET CMD=-pa ./bin/ -run view_asn
 IF "%1" == "" GOTO Run
 IF "%2" == "" GOTO Usage
 IF "%3" == "" GOTO Usage
+SET TYPE="asn"
+IF NOT "%4" == "" SET TYPE=%4
 SET CMD=%CMD% view $1 $2 $3
 
 :Run
@@ -25,6 +27,7 @@ ECHO.
 ECHO   File    - File to be decoded
 ECHO   ASN1    - ASN.1 Specification to be used
 ECHO   Version - Version of ASN.1 Specification
+ECHO   Output  - ASN | XML
 ECHO. 
 ECHO With no parameters given a GUI will be started.
 ECHO With ALL parameters given output will be shown

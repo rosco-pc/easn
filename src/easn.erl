@@ -33,7 +33,8 @@
 -compile(export_all).
 
 -include("easn.hrl").
--include("asn1_records.hrl").		%% Copied from lib/asn
+-include("asn1_records.hrl").		%% Used for pretty printing. Copied from lib/asn, as compiler can not find:
+%-include_lib("asn/src/asn1_records.hrl").
 -author("Rob Schmersel <rob@schmersel.net>").
 
 %%
@@ -44,18 +45,20 @@
 %% Start gui
 %%
 start() ->
-	spawn(easn_gui,start,[self()]),								%% Start GUI
-	loop().														%% Wait for parsing request from GUI
+%	easn_gui:start().											%% Start GUI
+	spawn(easn_gui, start, self()),
+	loop().
 
 %%
 %% Start CLI
 %%
-view([FN, ASN_spec, Version, Enc]) ->
+view([FN, ASN_spec, Version, Enc, Type]) ->
 	case filelib:is_regular(ASN_spec) of
 	  true -> 
 	  	%% Compile ASN.1 Spec, get module name and root of ASN.1 spec
-		self() ! {compile, self, FN, #asn{file=ASN_spec,version=Version, enc=Enc}},
-		loop();
+		Spec = compile(#asn{file=ASN_spec,version=Version, enc=Enc}),
+		parse(FN, Spec),
+		show(Spec, 1, Type); 
 	  false ->
 		io:fwrite("~s does not exist~n",[ASN_spec])
 	end.
@@ -63,6 +66,30 @@ view([FN, ASN_spec, Version, Enc]) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Helper functions
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+show(Spec, Count, Type) when Type == xml ->
+	case ets:lookup(decoded, Count) of
+	[] -> 														%% Last record
+		ok;
+	[{error, Reason}] ->										%% Error
+		io:format("~n<!-- Error: ~s -->~n",[Reason]);
+	[Rec] ->													%% Decoded information
+		io:format("~n<!-- Part ~B -->~n", [Count]),
+		io:format("~s~n", [to_xml(Spec#asn.spec#asn_spec.root, Rec, 0, Spec#asn.spec#asn_spec.db)]),
+		show(Spec, Count+1, Type)
+	end;
+show(Spec, Count, Type) when Type == asn ->
+	case ets:lookup(decoded, Count) of
+	[] -> 														%% Last record
+		ok;
+	[{error, Reason}] ->										%% Error
+		io:format("~nError: ~s~n",[Reason]);
+	[Rec] ->													%% Decoded information
+		io:format("~n-- Part ~B~n", [Count]),
+		io:format("~s~n", [to_asn(Spec#asn.spec#asn_spec.root, Rec, 0, Spec#asn.spec#asn_spec.db)]),
+		show(Spec, Count+1, Type)
+	end;
+show(_, _, Type) ->
+	io:format("Error: Unknown type ~s~n",[Type]).
 
 %%
 %% Handle requests
@@ -70,14 +97,24 @@ view([FN, ASN_spec, Version, Enc]) ->
 loop() ->
 	receive
 	{parse, Pid, {FN, Asn_spec}} ->
-		Pid ! {parse_done, parse(FN, Asn_spec, Pid)},
+		io:format("Start parsing ~s~n",[FN]),
+		Res = parse(FN, Asn_spec),
+		io:format("Parsing finished~n",[]),
+		case Res of
+		{ok, Count} -> Pid ! {parse_done, Count};
+		{error, _} ->  Pid ! Res
+		end,
 		loop();
 	{compile, Pid, Asn} ->
-		Pid ! {compile_done, compile(Asn, Pid)},
+		io:format("Compile ASN.1 Specification ~s~n",[Asn#asn.file]),
+		Res = compile(Asn),
+		io:format("Compile finished~n",[]),
+		Pid ! {compile_done, Res},
 		loop();
 	{retrieve_asn, Pid, Asn} ->
-		io:format("Retrieving ASN",[]),
-		Pid ! {asn_spec, retrieveASN(Asn)},
+		io:format("Retrieving ASN ~s~n",[Asn#asn.file]),
+		Res = retrieveASN(Asn),
+		Pid ! {asn_spec, Res},
 		loop();
 	{close} ->
 		ok;
@@ -108,27 +145,27 @@ loop() ->
 %% FN   - File to decode
 %% Asn - ASN.1 Specification details {codec module, root tag}
 %%
-parse(FN, Asn_spec, Pid) ->
+parse(FN, Asn_spec) ->
+	ets:new(decoded, [named_table]),
 	case filelib:is_regular(FN) of
 	  true ->
-		%% Parse File
-		{ok, Bytes} = file:read_file(FN),
-		Pid ! {hex, to_hex(Bytes,0,[])},
-		parse_asn(Asn_spec, 1, Bytes, Pid);								
+		{ok, Bytes} = file:read_file(FN),						%% Read file
+		ets:insert(decoded, {0,{size(Bytes), Bytes}}),			%% Store contents 
+		parse_asn(Asn_spec, 1, Bytes);							%% Parse file
 	  false ->
-		Pid ! {error, io_lib:format("~s does not exist",[FN])}
+		{error, io_lib:format("~s does not exist",[FN])}		%% Error
 	end.
 
 %%
 %% Compile asn. specification if not already done so.
 %%
 %% ASN_spec - asn.1 specification file name
-compile(Asn, Pid) ->
+compile(Asn) ->
 	ASN_spec = Asn#asn.file,
 	%% Extract specification filename without path & extension
     Base = basename(ASN_spec),									%% Get filename without extension
 	Dir = filename:dirname(code:which(?MODULE)),
-	Pid ! {status, io_lib:format("~nCompiling asn.1 specification: ~s~n",[ASN_spec])},
+	io:format("~nCompiling asn.1 specification: ~s~n",[ASN_spec]),
 	%% Check if specification alrady compiled
 	case checkASN(Asn) of										%% Check if already compiled version exists
 	true -> 
@@ -141,7 +178,7 @@ compile(Asn, Pid) ->
 		Tag = get_root(DB),										%% Determine 'root' tag
 		ets:delete(DB),
 		DBs = checkDB(ASN_spec),								%% get ALL asn1db files produced
-		Pid ! {status, io_lib:format("  Root: ~s~n",[Tag])},
+		io:format("  Root: ~s~n",[Tag]),
 		S = #asn_spec{db=DBs, mod=list_to_atom(Base), root=Tag},
 		storeASN(Asn#asn{spec=S})
 	end.
@@ -176,32 +213,30 @@ get_root(DB, Key, Root, Tag) ->
 %% Parse ASN.1 encoded file
 %%
 %% Spec  - needed asn.1 data, Module, asn1db and root tag
-%% Count - piece counter
+%% Count - parts counter
 %% Bytes - binary data to be decoded 
 %%
-parse_asn(_, _, <<>>, _) -> ok;									%% Done with parsing
-parse_asn(Spec, Count, <<H,T/binary>>, Dev) when H==0 -> 		%% Skip filler bytes
-	parse_asn(Spec, Count, T, Dev); 
-parse_asn(Spec, Count, Bytes, Dev) when is_binary(Bytes) ->		%% Parse ASN.1 file
+parse_asn(_, Count, <<>>) -> {ok, Count};									%% Done with parsing
+parse_asn(Spec, Count, <<H,T/binary>>) when H==0 -> 		%% Skip filler bytes
+	parse_asn(Spec, Count, T); 
+parse_asn(Spec, Count, Bytes) ->							%% Parse ASN.1 file
 	Mod = Spec#asn_spec.mod,
+	%Dev ! {status, io_lib:format("Decoding part ~B", [Count])},
 	case Mod:decode(Spec#asn_spec.root, Bytes) of
 		{ok, Dec, T} ->											%% Decoded data
-			Dev ! {status, io_lib:format("~n~n<!-- CDR #~p -->~n",[Count])},
-			%Data = tuple_to_list(Dec),		%% Get data
-			Asn = to_asn(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db),	%% Human readable printout
-			Xml = to_xml(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db), 
-			Dev ! {parse_result, Dec, Asn, Xml},
-			parse_asn(Spec, Count + 1, T, Dev);					%% Continue parsing
+			%Asn = to_asn(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db),	%% Human readable printout
+			%Xml = to_xml(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db), 
+			%Dev ! {parse_result, Dec, Asn, Xml},
+			ets:insert(decoded, {Count, size(T), Dec}),
+			parse_asn(Spec, Count + 1, T);					%% Continue parsing
 		{ok, Dec} ->											%% Last piece of decoded data
-			Dev ! {status, io_lib:format("~n~n<!-- CDR #~p -->~n",[Count])},
-			%Data = tuple_to_list(Dec),		%% Get data
-			%io:fwrite("~p~n",[Data]),
-			Asn = to_asn(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db),	%% Human readable printout
-			Xml = to_xml(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db), 
-			Dev ! {parse_result, Dec, Asn, Xml},
-			ok;
+			%Asn = to_asn(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db),	%% Human readable printout
+			%Xml = to_xml(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db), 
+			%Dev ! {parse_result, Dec, Asn, Xml},
+			ets:insert(decoded, {Count, 0, Dec}),
+			{ok, Count};
 		Other ->												%% Error
-			%%io:format("~p~n",[Other]),							%% Report
+			ets:insert(decoded, {Count, Other}),
 			Other												%% Quite parsing
 	end.
 
@@ -217,18 +252,18 @@ to_asn(Root, Data, Indent, DB) ->
 	DefRec = getDefinition(DB, Root),							%% Get Root definition from DB
 	Name = DefRec#typedef.name,									%% Name of element
 	Def = DefRec#typedef.typespec#type.def,						%% Type of element
-	%io_lib:format("Name: ~p~nRecord: ~p~n",[Name, Data]).
+	%io:format("Name: ~p~nRecord: ~p~n",[Name, Data]).
 	write_asn_elem(Name, Def, Data, Indent, DB).
-
+	
 write_asn_elem(Name, Def, Data, Indent, DB) when is_tuple(Data) ->
 	write_asn_elem(Name, Def, tuple_to_list(Data), Indent, DB);
-write_asn_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SEQUENCE' -> 	%% Handle SEQUENCE type
+write_asn_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SEQUENCE' -> %% Handle SEQUENCE type
 	Components = Def#'SEQUENCE'.components,
 	N1 = [indent(Indent) | atom_to_list(Name)],
-	[io_lib:format("~s ::= SEQUENCE {~n",[N1]) | 
+	[io_lib:format("~s ::= SEQUENCE {~n",[N1]) |
 	 [write_asn_comp(T, Components, Indent+1, DB) |
 	 [io_lib:format("~s}~n",[indent(Indent)])]]];
-write_asn_elem(_, Def, Data, Indent, DB) when element(1,Def)=='SEQUENCE OF' -> 	%% Handle SEQUENCE OF type
+write_asn_elem(_, Def, Data, Indent, DB) when element(1,Def)=='SEQUENCE OF' -> %% Handle SEQUENCE OF type
 	Type = element(2, Def),
 	D1 = Type#type.def,
 	case element(1, D1) of
@@ -241,16 +276,16 @@ write_asn_elem(_, Def, Data, Indent, DB) when element(1,Def)=='SEQUENCE OF' -> 	
 	_ ->
 		io_lib:format("Def: ~p~n",[D1])
 	end;
-write_asn_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SET' -> 	%% Handle SET type
+write_asn_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SET' -> %% Handle SET type
 	Components = element(1,Def#'SET'.components),
 	N1 = [indent(Indent) | atom_to_list(Name)],
-	[io_lib:format("~s ::= SET {~n",[N1]) | 
+	[io_lib:format("~s ::= SET {~n",[N1]) |
 	 [write_asn_comp(T, Components, Indent+1, DB) |
 	 [io_lib:format("~s}~n",[indent(Indent)])]]];
 write_asn_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='CHOICE' -> %% Handle CHOICE type
 	%io:format("N: ~p~nD: ~p~nH: ~p~nT: ~p~n",[Name, Def,H,T]),
-	Type = getChoice(element(2, Def), H),			%% Get spec of actual element
-	D1 = Type#type.def,											%% Type of element
+	Type = getChoice(element(2, Def), H),	%% Get spec of actual element
+	D1 = Type#type.def,	%% Type of element
 	[Record] = T,
 	Data = to_list(Record),
 	N1 = [indent(Indent) | atom_to_list(Name)],
@@ -259,8 +294,8 @@ write_asn_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='CHOICE' -> %%
 	 [io_lib:format("~s}~n",[indent(Indent)])]]];
 write_asn_elem(_, Def, Data, Indent, DB) when element(1,Def)=='Externaltypereference' -> %% New definition
 	DefRec = getDefinition(DB, Def#'Externaltypereference'.type),
-	N1 = DefRec#typedef.name,									%% Name of element
-	D1 = DefRec#typedef.typespec#type.def,						%% Type of element
+	N1 = DefRec#typedef.name,	%% Name of element
+	D1 = DefRec#typedef.typespec#type.def,	%% Type of element
 	%io_lib:format("Name: ~p~nRecord: ~p~n",[Name, Data]).
 	write_asn_elem(N1, D1, Data, Indent, DB);
 write_asn_elem(Name, _, Data, Indent, _) ->						%% BIG HACK, need to check!!
@@ -317,7 +352,7 @@ to_xml(Root, Data, Indent, DB) ->
 	DefRec = getDefinition(DB, Root),							%% Get Root definition from DB
 	Name = DefRec#typedef.name,									%% Name of element
 	Def = DefRec#typedef.typespec#type.def,						%% Type of element
-	%io_lib:format("Name: ~p~nRecord: ~p~n",[Name, Data]).
+	%io:format("Name: ~p~nRecord: ~p~n",[Name, Data]).
 	write_xml_elem(Name, Def, Data, Indent, DB).
 
 write_xml_elem(Name, Def, Data, Indent, DB) when is_tuple(Data) ->
