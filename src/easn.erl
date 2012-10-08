@@ -1,4 +1,5 @@
 %%
+%%
 %% %CopyrightBegin%
 %%
 %% Copyright Rob Schmersel 2012. All Rights Reserved.
@@ -16,38 +17,24 @@
 %%
 %% %CopyrightEnd%
 %%-------------------------------------------------------------------
-%% File    : easn.erl
+%% File    : easn_gui.erl
 %% Author  : Rob Schmersel <rob@schmersel.net>
-%% Description : Generic asn.1 viewer & editor
+%% Description : GUI for generic asn.1 viewer & editor
 %%
-%% Created :  18 Aug 2012 - Initial release
+%% Created :  30 Aug 2012 - Initial release
+%% Updated :  30 Sep 2012 - use xrc for GUI
 
 %%	Still TODO: - Allow editing/re-encoding of decoded data
 %%-------------------------------------------------------------------
 
-%% Purpose: General purpose ASN.1 Decoder
 
--module('easn').
-%-export([start/0, view/1]).
-%-export([storeASN/1, retrieveASN/1, checkASN/2, updateConfig/2]).
+-module(easn).
+%-export([start/1]).
 -compile(export_all).
 
 -include("easn.hrl").
--include("asn1_records.hrl").		%% Used for pretty printing. Copied from lib/asn, as compiler can not find:
-%-include_lib("asn/src/asn1_records.hrl").
--author("Rob Schmersel <rob@schmersel.net>").
+-include_lib("wx/include/wx.hrl").
 
-%%
-%% Public API
-%%
-
-%%
-%% Start gui
-%%
-start() ->
-%	easn_gui:start().											%% Start GUI
-	spawn(easn_gui, start, self()),
-	loop().
 
 %%
 %% Start CLI
@@ -56,582 +43,384 @@ view([FN, ASN_spec, Version, Enc, Type]) ->
 	case filelib:is_regular(ASN_spec) of
 	  true -> 
 	  	%% Compile ASN.1 Spec, get module name and root of ASN.1 spec
-		Spec = compile(#asn{file=ASN_spec,version=Version, enc=Enc}),
-		parse(FN, Spec),
-		show(Spec, 1, Type); 
+		Spec = easn_parse:compile(#asn{file=ASN_spec,version=Version, enc=Enc}),
+		easn_parse:parse(FN, Spec),
+		easn_parse:show(Spec, 1, Type); 
 	  false ->
 		io:fwrite("~s does not exist~n",[ASN_spec])
 	end.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% Helper functions
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-show(Spec, Count, Type) when Type == xml ->
-	case ets:lookup(decoded, Count) of
-	[] -> 														%% Last record
-		ok;
-	[{error, Reason}] ->										%% Error
-		io:format("~n<!-- Error: ~s -->~n",[Reason]);
-	[Rec] ->													%% Decoded information
-		io:format("~n<!-- Part ~B -->~n", [Count]),
-		io:format("~s~n", [to_xml(Spec#asn.spec#asn_spec.root, Rec, 0, Spec#asn.spec#asn_spec.db)]),
-		show(Spec, Count+1, Type)
-	end;
-show(Spec, Count, Type) when Type == asn ->
-	case ets:lookup(decoded, Count) of
-	[] -> 														%% Last record
-		ok;
-	[{error, Reason}] ->										%% Error
-		io:format("~nError: ~s~n",[Reason]);
-	[Rec] ->													%% Decoded information
-		io:format("~n-- Part ~B~n", [Count]),
-		io:format("~s~n", [to_asn(Spec#asn.spec#asn_spec.root, Rec, 0, Spec#asn.spec#asn_spec.db)]),
-		show(Spec, Count+1, Type)
-	end;
-show(_, _, Type) ->
-	io:format("Error: Unknown type ~s~n",[Type]).
+%%
+%% Start GUI
+%%
+start() ->
+    Wx = wx:new(),											    %% Starts wxwidgets
+    Xrc = wxXmlResource:get(),									%% use XRC to define appplication layout
+    wxXmlResource:initAllHandlers(Xrc),							%% Initialize ALL handlers (quick and dirty)
+    true = wxXmlResource:load(Xrc, rc_dir("main.xrc")),			%% Load main window
+    true = wxXmlResource:load(Xrc, rc_dir("asn_dlg.xrc")),		%% Load ASN.1 dialog
+    true = wxXmlResource:load(Xrc, rc_dir("menu.xrc")),			%% Load Menu bar
+    Frame = wxFrame:new(),										%% Create new WIndow
+    myframe(Wx,Frame),											%% Build-up window
+    
+	%% Get references for later use
+	Chooser = wxXmlResource:xrcctrl(Frame, "choose", wxComboBox),
+	Out = wxXmlResource:xrcctrl(Frame, "out_info", wxTextCtrl),
+	Asn = wxXmlResource:xrcctrl(Frame, "out_asn", wxTextCtrl),
+	Xml = wxXmlResource:xrcctrl(Frame, "out_xml", wxTextCtrl),
+	Hex = wxXmlResource:xrcctrl(Frame, "out_hex", wxTextCtrl),
+	Comp = wxXmlResource:xrcctrl(Frame, "components", wxTreeCtrl),
+	Recent = wxXmlResource:xrcctrl(Frame, "recent", wxMenu),
+	W = #win{frame=Frame, asn=Asn, xml=Xml, info=Out,
+			 hex=Hex,comp=Comp,choice=Chooser},
+				
+	%% Add already known ASN specifications to the ComboBox
+	List = scan_asn(),
+	[wxComboBox:append(Chooser, C#asn.title, C) || C <- List],
+	
+	%% Select last used ASN.1 spec
+	Config = get_config(),
+	Index = case Config#config.files of
+			[] 		   -> 0;
+			[{_F,A}|_] -> wxComboBox:findString(Chooser, A#asn.title)
+			end, 
+	wxComboBox:setSelection(Chooser, Index),
+	Asn1 = easn_parse:retrieveASN(wxComboBox:getClientData(Chooser, Index)),	%% Make sure that all files are in place
+																	%% and get the correct DB references
+	%% Add recent file to menu
+	add_recent(Recent, Config#config.files),
+	
+	wxFrame:show(Frame),										%% Show frame
+	Pid = spawn(easn_parse, start, [self()]),							%% Start the parser
+	loop(#state{wx=W,parse=Pid,asn=Asn1}),					%% Handle GUI events
+	io:format("Close wx~n",[]),
+    wx:destroy(),												%% Stop wx server.
+	exit(Pid, kill).											%% Stop parser
+
+rc_dir(File) ->
+	SelfDir = filename:dirname(code:which(?MODULE)),
+	filename:join([SelfDir,"rc",File]).
+
+myframe(Parent, Frame) ->
+    Xrc = wxXmlResource:get(),
+    wxXmlResource:loadFrame(Xrc, Frame, Parent, "main"),
+    wxTopLevelWindow:setIcon(Frame, wxXmlResource:loadIcon(Xrc,"appicon")),
+    %% Load and setup menubar
+    wxFrame:setMenuBar(Frame, wxXmlResource:loadMenuBar(Xrc, "menu")),
+    %wxFrame:setToolBar(Frame, wxXmlResource:loadToolBar(Xrc, Frame, "main_toolbar")),
+    wxFrame:createStatusBar(Frame, [{number,1}]),
+    connect(Frame).
+  
+connect(Frame) ->   
+	%% Handle Close window event
+    ok = wxFrame:connect(Frame, close_window), 
+	%% Handle menu events, make sure that NAME in xrc = wxID_XXXXX
+    wxFrame:connect(Frame, command_menu_selected, [{id, ?wxID_OPEN}]),
+    wxFrame:connect(Frame, command_menu_selected, [{id, ?wxID_SAVE}]),
+    wxFrame:connect(Frame, command_menu_selected, [{id, ?wxID_SAVEAS}]),
+    wxFrame:connect(Frame, command_menu_selected, [{id, ?wxID_COPY}]),
+    wxFrame:connect(Frame, command_menu_selected, [{id, ?wxID_HELP}]),
+    wxFrame:connect(Frame, command_menu_selected, [{id, ?wxID_EXIT}]),
+    wxFrame:connect(Frame, command_menu_selected, [{id, ?wxID_ABOUT}]),
+	%% Handle non-standard/own menus
+    Menus = [importASN, options],
+    [connect_xrcid(Str,Frame) || Str <- Menus],
+    %% Handle combobox events
+	Chooser = wxXmlResource:xrcctrl(Frame, "choose", wxComboBox),
+    wxComboBox:connect(Chooser, command_combobox_selected), 
+    %% Handle treelist events
+	Comp = wxXmlResource:xrcctrl(Frame, "components", wxTreeCtrl),
+    wxTreeCtrl:connect(Comp, command_tree_item_collapsed),
+    wxTreeCtrl:connect(Comp, command_tree_item_expanded),
+    wxTreeCtrl:connect(Comp, command_tree_sel_changed),
+    ok.
+
+connect_xrcid(Name,Frame) ->
+    ID = wxXmlResource:getXRCID(atom_to_list(Name)),
+    put(ID, Name),
+    wxFrame:connect(Frame, command_menu_selected, [{id,ID}]).
 
 %%
-%% Handle requests
+%% Update Recently used files menu
 %%
-loop() ->
-	receive
-	{parse, Pid, {FN, Asn_spec}} ->
-		io:format("Start parsing ~s~n",[FN]),
-		Res = parse(FN, Asn_spec),
-		io:format("Parsing finished~n",[]),
-		case Res of
-		{ok, Count} -> Pid ! {parse_done, Count};
-		{error, _} ->  Pid ! Res
-		end,
-		loop();
-	{compile, Pid, Asn} ->
-		io:format("Compile ASN.1 Specification ~s~n",[Asn#asn.file]),
-		Res = compile(Asn),
-		io:format("Compile finished~n",[]),
-		Pid ! {compile_done, Res},
-		loop();
-	{retrieve_asn, Pid, Asn} ->
-		io:format("Retrieving ASN ~s~n",[Asn#asn.file]),
-		Res = retrieveASN(Asn),
-		Pid ! {asn_spec, Res},
-		loop();
-	{close} ->
-		ok;
-	%% Handle parse and compile result for CLI version
-	{status, _Reply, Msg} ->
-		io:format("~s",[Msg]),
-		loop();
-	{compile_done, FN, Asn} ->
-		self() ! {parse, self(), [], {FN, Asn#asn.spec}},
-		loop();
-	{parse_result, _Data, Asn, _Xml} ->
-		io:format("~s",[Asn]),
-		loop();
-	{parse_done, _Reply, Msg} ->
-		io:format("~s",[Msg]),
-		ok;
-	%% Unknown commands
-	Msg ->
-	    io:format("Got ~p ~n", [Msg]),
-	    loop()
-    after 5000 ->
-	    loop()
+add_recent(_, []) -> ok;
+add_recent(Recent, Files) ->
+	%% Add last used files
+	Add = fun(C, Cnt) -> 
+			wxMenu:append(Recent, wxMenuItem:new([
+            {id,	?wxID_FILE+Cnt},
+            {text,	element(1,C)}])), 
+			Cnt + 1 
+		  end,
+	lists:foldl(Add, 0, Files).
+
+
+%% Main event loop
+loop(State) ->
+	io:format("waiting for event~n"),
+    receive 
+    %% Handle window acions
+	#wx{id=Id, event=#wxCommand{}} ->
+		io:format("  Got ~p (~s)~n",[Id, get(Id)]),
+	    loop(handle_cmd(get(Id), Id, State));
+	%% Close Application
+	#wx{event=#wxClose{}} ->
+		io:format("Close Application~n",[]),
+	    wxWindow:destroy(State#state.wx#win.frame),		 %% Close window
+	    ok;
+	%% Handle response to view_asn request
+	%% Parsing Encoded file done
+	{parse_result, Count} when Count == 0 ->
+		[{Size, Data}] = ets:lookup(decoded, 0),
+		%addComponent(State#state.wx#win.comp, #result{asn={A1, A2},xml={X1, X2}}),
+		wxTextCtrl:appendText(State#state.wx#win.hex, Data),
+		loop(State#state{len=Size});
+	{parse_done, Count} ->
+		Out = State#state.wx#win.info,
+		wxTextCtrl:appendText(Out, io_lib:format("Parsed ~B parts",[Count])),
+		show(State),
+		loop(State);
+	%% Compiling ASN.1 specification done
+	{compile_done, _State, Asn} ->
+		Msg = "ASN.1 specification successfuly compiled",
+		Out = State#state.wx#win.info,
+		wxTextCtrl:appendText(Out, Msg),
+		%% Add new ASN.1 spec to dropdown box and select it
+		Title = Asn#asn.title,
+		Chooser = State#state.wx#win.choice,
+		wxComboBox:setSelection(Chooser, wxComboBox:append(Chooser, Title, Asn)),
+		%% Update State and continue
+		loop(State#state{asn=Asn});
+	%% Retrieved ASN data (and files put in place)
+	{asn_spec, _State, Asn} ->
+		io:format("  Update ASN: ~p~n",[Asn]),
+		loop(State#state{asn=Asn});
+	%% Status message
+	{status, _State, Msg} ->
+		Out = State#state.wx#win.info,
+		wxTextCtrl:appendText(Out, Msg),
+		loop(State);
+	%% Error Message
+	{error, _State, Msg} ->
+		Out = State#state.wx#win.info,
+		wxTextCtrl:appendText(Out, Msg),
+		loop(State);
+	Ev = #wx{} ->
+	    io:format("  Got wxEvent: ~p ~n", [Ev]),
+	    loop(State);
+	Ev ->
+		io:format("  Got ~p~n", [Ev]),
+		loop(State)
     end.
-	
-%%
-%% Parse file
-%%
-%% FN   - File to decode
-%% Asn - ASN.1 Specification details {codec module, root tag}
-%%
-parse(FN, Asn_spec) ->
-	ets:new(decoded, [named_table]),
-	case filelib:is_regular(FN) of
-	  true ->
-		{ok, Bytes} = file:read_file(FN),						%% Read file
-		ets:insert(decoded, {0,{size(Bytes), Bytes}}),			%% Store contents 
-		parse_asn(Asn_spec, 1, Bytes);							%% Parse file
-	  false ->
-		{error, io_lib:format("~s does not exist",[FN])}		%% Error
-	end.
 
-%%
-%% Compile asn. specification if not already done so.
-%%
-%% ASN_spec - asn.1 specification file name
-compile(Asn) ->
-	ASN_spec = Asn#asn.file,
-	%% Extract specification filename without path & extension
-    Base = basename(ASN_spec),									%% Get filename without extension
-	Dir = filename:dirname(code:which(?MODULE)),
-	io:format("~nCompiling asn.1 specification: ~s~n",[ASN_spec]),
-	%% Check if specification alrady compiled
-	case checkASN(Asn) of										%% Check if already compiled version exists
-	true -> 
-		retrieveASN(Asn);										%% asn.1 spec already compiled, copy it
-	false -> 
-		Enc = Asn#asn.enc,										%% Encoding rules used
-		ok = asn1ct:compile(ASN_spec,[Enc,undec_rest]),			%% Compile asn.1 specification
-		DBFile = filename:join([Dir, lists:concat([Base, ".asn1db"])]),
-		{ok, DB} = ets:file2tab(DBFile),						%% Read DB
-		Tag = get_root(DB),										%% Determine 'root' tag
-		ets:delete(DB),
-		DBs = checkDB(ASN_spec),								%% get ALL asn1db files produced
-		io:format("  Root: ~s~n",[Tag]),
-		S = #asn_spec{db=DBs, mod=list_to_atom(Base), root=Tag},
-		storeASN(Asn#asn{spec=S})
-	end.
+%% asn_dialog event loop
+loop_asn(State={Dlg, File, Version, Title, Enc}) ->
+	receive
+  	#wx{event=#wxClose{}} ->
+  	    io:format("Closing ASN.1 dialog ~n",[]),
+		{error, "Closed"}; 
+	#wx{event=#wxCommand{type=command_button_clicked}, id=?wxID_CANCEL} ->
+  	    io:format("Cancelling ASN.1 dialog ~n",[]),
+		{error, "Cancel"}; 
+	#wx{event = #wxFileDirPicker{type = command_filepicker_changed, path = Path}} ->
+		E = filename:extension(Path),
+		T = case filename:extension(filename:basename(Path, E)) of
+			[] -> filename:basename(Path, E);
+			E1 -> filename:basename(Path, E1++E)				%% Deal with .set.asn
+			end,
+		%% Suggest title
+		wxTextCtrl:clear(Title),
+		wxTextCtrl:appendText(Title, T),
+		loop_asn(State);
+	#wx{event=#wxCommand{type=command_button_clicked}, id=?wxID_OK} ->
+		Res = #asn{file=wxFilePickerCtrl:getPath(File),
+				   version=wxTextCtrl:getValue(Version),
+				   title=wxTextCtrl:getValue(Title),
+				   enc=wxRadioBox:getSelection(Enc)},
+  	    io:format("ASN.1 Data ~p~n",[Res]),
+		{ok, Res};
+	#wx{event=#wxCommand{type=command_button_clicked}, id=Id} ->
+		handle_cmd(get(Id), Id, Dlg),
+		loop_asn(State);
+	Msg ->
+	    io:format("ASN.1 dialog Got ~p ~n", [Msg]),
+	    loop_asn(State)
+    after 5000 ->
+	    loop_asn(State)
+    end.
 
-%%
-%% Get root tag
-%%
-%% DB - full path to asn1db file
-%%
-get_root(DB) ->											%% Determine root element, with lowest position
-	case ets:first(DB) of
-	  '$end_of_table' -> '';							%% Empty table
-	  Key ->
-		D = ets:lookup_element(DB, Key, 2),
-		get_root(DB, Key, Key, element(3,D))
-	end.
-	
-get_root(DB, Key, Root, Tag) ->
-	case ets:next(DB, Key) of
-	  '$end_of_table' -> Root;
-	  Next ->
-		D = ets:lookup_element(DB, Next, 2),
-		T = element(3, D),
-		if T < Tag -> 
-		  get_root(DB, Next, Next, T);
-		true -> 
-		  get_root(DB, Next, Root, Tag) 
-		end
-	end.
-	
-%%
-%% Parse ASN.1 encoded file
-%%
-%% Spec  - needed asn.1 data, Module, asn1db and root tag
-%% Count - parts counter
-%% Bytes - binary data to be decoded 
-%%
-parse_asn(_, Count, <<>>) -> {ok, Count};									%% Done with parsing
-parse_asn(Spec, Count, <<H,T/binary>>) when H==0 -> 		%% Skip filler bytes
-	parse_asn(Spec, Count, T); 
-parse_asn(Spec, Count, Bytes) ->							%% Parse ASN.1 file
-	Mod = Spec#asn_spec.mod,
-	%Dev ! {status, io_lib:format("Decoding part ~B", [Count])},
-	case Mod:decode(Spec#asn_spec.root, Bytes) of
-		{ok, Dec, T} ->											%% Decoded data
-			%Asn = to_asn(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db),	%% Human readable printout
-			%Xml = to_xml(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db), 
-			%Dev ! {parse_result, Dec, Asn, Xml},
-			ets:insert(decoded, {Count, size(T), Dec}),
-			parse_asn(Spec, Count + 1, T);					%% Continue parsing
-		{ok, Dec} ->											%% Last piece of decoded data
-			%Asn = to_asn(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db),	%% Human readable printout
-			%Xml = to_xml(Spec#asn_spec.root, Dec, 0, Spec#asn_spec.db), 
-			%Dev ! {parse_result, Dec, Asn, Xml},
-			ets:insert(decoded, {Count, 0, Dec}),
-			{ok, Count};
-		Other ->												%% Error
-			ets:insert(decoded, {Count, Other}),
-			Other												%% Quite parsing
-	end.
 
-%%
-%% Human readable printout
-%% Use record definition in asn1_records.hrl, 
-%% to get the structure of the decoding output
-%%
-%% Data   - list with decoded data
-%% Indent - indentation counter
-%% DB     - list of asn1db files
-to_asn(Root, Data, Indent, DB) ->
-	DefRec = getDefinition(DB, Root),							%% Get Root definition from DB
-	Name = DefRec#typedef.name,									%% Name of element
-	Def = DefRec#typedef.typespec#type.def,						%% Type of element
-	%io:format("Name: ~p~nRecord: ~p~n",[Name, Data]).
-	write_asn_elem(Name, Def, Data, Indent, DB).
-	
-write_asn_elem(Name, Def, Data, Indent, DB) when is_tuple(Data) ->
-	write_asn_elem(Name, Def, tuple_to_list(Data), Indent, DB);
-write_asn_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SEQUENCE' -> %% Handle SEQUENCE type
-	Components = Def#'SEQUENCE'.components,
-	N1 = [indent(Indent) | atom_to_list(Name)],
-	[io_lib:format("~s ::= SEQUENCE {~n",[N1]) |
-	 [write_asn_comp(T, Components, Indent+1, DB) |
-	 [io_lib:format("~s}~n",[indent(Indent)])]]];
-write_asn_elem(_, Def, Data, Indent, DB) when element(1,Def)=='SEQUENCE OF' -> %% Handle SEQUENCE OF type
-	Type = element(2, Def),
-	D1 = Type#type.def,
-	case element(1, D1) of
-	'Externaltypereference' ->
-		N1 = D1#'Externaltypereference'.type,
-		N2 = [indent(Indent) | atom_to_list(N1)],
-		[io_lib:format( "~50.49s SEQUENCE OF {~n",[N2]) |
-		 [[to_asn(N1, X, Indent+1, DB) || X <- Data] |
-		 [io_lib:format( "~s}~n", [indent(Indent)])]]];
+%% Handle commands
+    
+handle_cmd(_, ?wxID_OPEN, State) ->
+	io:format("Select file: ",[]),
+	Frame = State#state.wx#win.frame,
+    FD = wxFileDialog:new(Frame,[{style, ?wxFD_OPEN bor ?wxFD_FILE_MUST_EXIST}]),
+    S1 = case wxDialog:showModal(FD) of
+	?wxID_OK ->
+		FN = wxFileDialog:getPath(FD),
+		io:format("~s~n",[FN]),
+		State#state.parse ! {parse, {FN, State#state.asn#asn.spec}},
+		wxTreeCtrl:deleteAllItems(State#state.wx#win.comp),
+		wxTreeCtrl:addRoot(State#state.wx#win.comp, FN),
+		State#state{file=FN};
 	_ ->
-		io_lib:format("Def: ~p~n",[D1])
-	end;
-write_asn_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SET' -> %% Handle SET type
-	Components = element(1,Def#'SET'.components),
-	N1 = [indent(Indent) | atom_to_list(Name)],
-	[io_lib:format("~s ::= SET {~n",[N1]) |
-	 [write_asn_comp(T, Components, Indent+1, DB) |
-	 [io_lib:format("~s}~n",[indent(Indent)])]]];
-write_asn_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='CHOICE' -> %% Handle CHOICE type
-	%io:format("N: ~p~nD: ~p~nH: ~p~nT: ~p~n",[Name, Def,H,T]),
-	Type = getChoice(element(2, Def), H),	%% Get spec of actual element
-	D1 = Type#type.def,	%% Type of element
-	[Record] = T,
-	Data = to_list(Record),
-	N1 = [indent(Indent) | atom_to_list(Name)],
-	[io_lib:format("~s ::= CHOICE {~n",[N1]) |
-	 [write_asn_elem(H, D1, Data, Indent+1, DB) |
-	 [io_lib:format("~s}~n",[indent(Indent)])]]];
-write_asn_elem(_, Def, Data, Indent, DB) when element(1,Def)=='Externaltypereference' -> %% New definition
-	DefRec = getDefinition(DB, Def#'Externaltypereference'.type),
-	N1 = DefRec#typedef.name,	%% Name of element
-	D1 = DefRec#typedef.typespec#type.def,	%% Type of element
-	%io_lib:format("Name: ~p~nRecord: ~p~n",[Name, Data]).
-	write_asn_elem(N1, D1, Data, Indent, DB);
-write_asn_elem(Name, _, Data, Indent, _) ->						%% BIG HACK, need to check!!
-	N1 = [indent(Indent) | atom_to_list(Name)],
-	io_lib:format( "~50.49s ~p~n",[N1, Data]).
-	
-write_asn_comp([], _, _,_) -> [];
-write_asn_comp(Data, Comp, Indent, DB) when is_tuple(Comp) ->
-	write_asn_comp(Data, element(1, Comp), Indent, DB);
-write_asn_comp([DH|DT], [_|CT], Indent, DB) when DH==asn1_NOVALUE ->		%% Skip elements with no value
-	write_asn_comp(DT, CT, Indent, DB);
-write_asn_comp([DH|DT], [CH|CT], Indent, DB) ->								%% Handle ComponentType
-	Def = CH#'ComponentType'.typespec#type.def,
-	[write_asn_type(DH, CH, Def, Indent, DB) | [write_asn_comp(DT, CT, Indent, DB)]].
-	
-write_asn_type([],_,_,_,_) -> [];
-write_asn_type(Data, _, Def, Indent, DB) when is_tuple(Def), 
-										      element(1, Def)=='Externaltypereference' ->
-	Name = Def#'Externaltypereference'.type,
-	to_asn(Name, Data, Indent+1, DB);
-%	 [write_asn_type(T, [], Def, Indent, DB)]];	
-write_asn_type(Data, Comp, Def, Indent, DB) when is_tuple(Def), 
-										 element(1, Def)=='SEQUENCE OF' ->
-	%io:format("Comp: ~p~n", [Comp]),
-	Tag = get_tag(Comp#'ComponentType'.tags),
-	%% Look-ahead for child definition
-	Type = element(2, Def),
-	D1 = Type#type.def,
-	case element(1, D1) of
-	'Externaltypereference' ->
-		N1 = D1#'Externaltypereference'.type,
-		Name = [indent(Indent) | atom_to_list(Comp#'ComponentType'.name)],
-		[io_lib:format( "~50.49s [~2.10.0B] SEQUENCE OF {~n",[Name, Tag]) |
-		 [[to_asn(N1, X, Indent+1, DB) || X <- Data] |
-		 [io_lib:format( "~s}~n", [indent(Indent)])]]];
-	_ ->
-		io_lib:format("Def: ~p~n",[D1])
-	end;
-write_asn_type(Data, Comp, Def, Indent, _) when Def == 'OCTET STRING' -> 
-	Tag = get_tag(Comp#'ComponentType'.tags),
-	D1 = [io_lib:format("~2.16.0B", [X]) || X <- Data],
-	Name = [indent(Indent) | atom_to_list(Comp#'ComponentType'.name)],
-	io_lib:format( "~50.49s [~2.10.0B] ~s~n",[Name, Tag, D1]);
-write_asn_type(Data, Comp, _, Indent, _) when is_binary(Data) -> 	
-	Tag = get_tag(Comp#'ComponentType'.tags),
-	Name = [indent(Indent) | atom_to_list(Comp#'ComponentType'.name)],
-	io_lib:format( "~50.49s [~2.10.0B] ~p~n",[Name, Tag, binary_to_list(Data)]);	
-write_asn_type(Data, Comp, _, Indent, _)  -> 	
-	Tag = get_tag(Comp#'ComponentType'.tags),
-	Name = [indent(Indent) | atom_to_list(Comp#'ComponentType'.name)],
-	io_lib:format( "~50.49s [~2.10.0B] ~p~n",[Name, Tag, Data]).
-	 
-to_xml(Root, Data, Indent, DB) -> 
-	DefRec = getDefinition(DB, Root),							%% Get Root definition from DB
-	Name = DefRec#typedef.name,									%% Name of element
-	Def = DefRec#typedef.typespec#type.def,						%% Type of element
-	%io:format("Name: ~p~nRecord: ~p~n",[Name, Data]).
-	write_xml_elem(Name, Def, Data, Indent, DB).
+		io:format("-~n"),
+	    State
+    end,
+    wxFileDialog:destroy(FD),
+    S1;
 
-write_xml_elem(Name, Def, Data, Indent, DB) when is_tuple(Data) ->
-	write_xml_elem(Name, Def, tuple_to_list(Data), Indent, DB);
-write_xml_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SEQUENCE' -> 	%% Handle SEQUENCE type
-	Components = Def#'SEQUENCE'.components,
-	[io_lib:format("~s<~s>~n",[indent(Indent),Name]) | 
-	 [write_xml_comp(T, Components, Indent+1, DB) |
-	 [io_lib:format("~s</~s>~n",[indent(Indent),Name])]]];
-write_xml_elem(_, Def, Data, Indent, DB) when element(1,Def)=='SEQUENCE OF' -> 	%% Handle SEQUENCE OF type
-	Type = element(2, Def),
-	D1 = Type#type.def,
-	case element(1, D1) of
-	'Externaltypereference' ->
-		N1 = D1#'Externaltypereference'.type,
-		[io_lib:format( "~s<~s>~n",[indent(Indent), N1]) |
-		 [[to_xml(N1, X, Indent+1, DB) || X <- Data] |
-		 [io_lib:format( "~s</~s>~n",[indent(Indent), N1])]]];
-	_ ->
-		io_lib:format("Def: ~p~n",[D1])
-	end;
-write_xml_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SET' -> 	%% Handle SET type
-	Components = element(1,Def#'SET'.components),
-	[io_lib:format( "~s<~s>~n",[indent(Indent), Name]) |
-	 [write_xml_comp(T, Components, Indent+1, DB) |
-	 [io_lib:format("~s</~s>~n",[indent(Indent),Name])]]];
-write_xml_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='CHOICE' -> %% Handle CHOICE type
-	%io:format("N: ~p~nD: ~p~nH: ~p~nT: ~p~n",[Name, Def,H,T]),
-	Type = getChoice(element(2, Def), H),						%% Get spec of actual element
-	D1 = Type#type.def,											%% Type of element
-	[Record] = T,
-	Data = to_list(Record),
-	[io_lib:format("~s<~s>~n",[indent(Indent),Name])|
-	 [write_xml_elem(H, D1, Data, Indent+1, DB) |
-	 [io_lib:format("~s</~s>~n",[indent(Indent),Name])]]];
-write_xml_elem(_, Def, Data, Indent, DB) when element(1,Def)=='Externaltypereference' -> %% New definition
-	DefRec = getDefinition(DB, Def#'Externaltypereference'.type),
-	N1 = DefRec#typedef.name,									%% Name of element
-	D1 = DefRec#typedef.typespec#type.def,						%% Type of element
-	write_xml_elem(N1, D1, Data, Indent, DB);
-write_xml_elem(Name, _, Data, Indent, _) ->						%% BIG HACK, need to check!!
-	io_lib:format( "~s<~s>~p</~s>~n",[indent(Indent), Name, Data, Name]).
-	
-write_xml_comp([], _, _,_) -> [];
-write_xml_comp(Data, Comp, Indent, DB) when is_tuple(Comp) ->
-	write_xml_comp(Data, element(1, Comp), Indent, DB);
-write_xml_comp([DH|DT], [_|CT], Indent, DB) when DH==asn1_NOVALUE ->		%% Skip elements with no value
-	write_xml_comp(DT, CT, Indent, DB);
-write_xml_comp([DH|DT], [CH|CT], Indent, DB) ->								%% Handle ComponentType
-	Def = CH#'ComponentType'.typespec#type.def,
-	[write_xml_type(DH, CH, Def, Indent, DB) | [write_xml_comp(DT, CT, Indent, DB)]].
-	
-write_xml_type([],_,_,_,_) -> [];
-write_xml_type(Data, _, Def, Indent, DB) when is_tuple(Def), 
-										 element(1, Def)=='Externaltypereference' ->
-	Name = Def#'Externaltypereference'.type,
-	to_xml(Name, Data, Indent+1, DB);
-%	 [write_xml_type(T, [], Def, Indent, DB)]];	
-write_xml_type(Data, Comp, Def, Indent, DB) when is_tuple(Def), 
-										 element(1, Def)=='SEQUENCE OF' ->
-	%% Look-ahead for child definition
-	Type = element(2, Def),
-	D1 = Type#type.def,
-	case element(1, D1) of
-	'Externaltypereference' ->
-		N1 = D1#'Externaltypereference'.type,
-		Name = atom_to_list(Comp#'ComponentType'.name),
-		[io_lib:format("~s<~s>~n",[indent(Indent),Name])|
-		 [[to_xml(N1, X, Indent+1, DB) || X <- Data] |
-		 [io_lib:format("~s</~s>~n",[indent(Indent),Name])]]];
-	_ ->
-		io_lib:format("Def: ~p~n",[D1])
-	end;
-write_xml_type(Data, Comp, Def, Indent, _) when Def == 'OCTET STRING' -> 
-	D1 = [io_lib:format("~2.16.0B", [X]) || X <- Data],
-	Name = Comp#'ComponentType'.name,
-	io_lib:format( "~s<~s>~s</~s>~n",[indent(Indent), Name, D1, Name]);
-write_xml_type(Data, Comp, _, Indent, _) when is_binary(Data) -> 	
-	Name = Comp#'ComponentType'.name,
-	io_lib:format( "~s<~s>~s</~s>~n",[indent(Indent), Name, binary_to_list(Data), Name]);
-write_xml_type(Data, Comp, _, Indent, _)  -> 	
-	Name = Comp#'ComponentType'.name,
-	io_lib:format( "~s<~s>~p</~s>~n",[indent(Indent), Name, Data, Name]).
-	 
+handle_cmd(_, ?wxID_SAVE, State) ->
+	File = State#state.file,
+	Dir = filename:dirname(File),							
+    Ext = filename:extension(File),	
+    Base = filename:basename(File,Ext),
+	%% Save ASN.1
+	Path = lists:concat([Dir, "/", Base, ".txt"]), 
+	Out = State#state.wx#win.asn,
+	wxTextCtrl:saveFile(Out, [{file, Path}]),
+	%% Save XML
+	Path = lists:concat([Dir, "/", Base, ".xml"]), 
+	Out = State#state.wx#win.xml,
+	wxTextCtrl:saveFile(Out, [{file, Path}]),
+    State;
 
-to_hex(Bytes, Offset, String) ->
-	case hex_line(Bytes, Offset) of
-	{ok, Line, <<>>, _Offset} ->
-		lists:reverse([Line|String]);
-	{ok, Line, Rest, Offset1} ->
-		to_hex(Rest, Offset1, [Line|String])
+handle_cmd(_, ?wxID_SAVEAS, State) ->
+	Frame = State#state.wx#win.frame,
+    FD = wxFileDialog:new(Frame, [{style, ?wxFD_SAVE bor ?wxFD_OVERWRITE_PROMPT}]),
+    case wxFileDialog:showModal(FD) of
+	?wxID_OK ->
+	    Path = wxFileDialog:getPath(FD),
+		Out = case filename:extension(Path) of
+			  ".xml" -> State#state.wx#win.xml;
+			  _      -> State#state.wx#win.asn
+			  end,
+		wxTextCtrl:saveFile(Out, [{file, Path}]);
+	_ ->
+	    ignore
+    end,
+    wxDialog:destroy(FD),
+    State;
+
+handle_cmd(_, ?wxID_EXIT, State) ->
+	io:format("Exit application~n",[]),
+    wxFrame:close(State#state.wx#win.frame),				 %% Close window
+	State;
+
+handle_cmd(_, ?wxID_ABOUT, State) ->
+	Frame = State#state.wx#win.frame,
+    Msg = lists:flatten(["ASN.1 viewer/editor version 1.0",
+						 "\n\n",169," 2012 Robert Schmersel"]),
+    MD = wxMessageDialog:new(Frame,Msg,
+			     [{style, ?wxOK bor ?wxICON_INFORMATION}, 
+			      {caption, "About"}]),
+    wxDialog:showModal(MD),
+    wxDialog:destroy(MD),
+	State;
+
+handle_cmd(importASN, _, State) ->
+	Frame = State#state.wx#win.frame,
+	%% Create Dialog
+    Dlg = wxDialog:new(),
+    Xrc = wxXmlResource:get(),
+    true = wxXmlResource:loadDialog(Xrc, Dlg, Frame, "asn_dlg"),
+	
+	%% Get references
+	File = wxXmlResource:xrcctrl(Dlg, "file", wxFilePickerCtrl),
+	Version = wxXmlResource:xrcctrl(Dlg, "version", wxTextCtrl),
+	Title = wxXmlResource:xrcctrl(Dlg, "title", wxTextCtrl),
+	Enc = wxXmlResource:xrcctrl(Dlg, "enc", wxRadioBox),
+	
+	%% Connect actions
+	wxDialog:connect(Dlg, close_window),
+	wxFilePickerCtrl:connect(File, command_filepicker_changed, []),
+	wxDialog:connect(Dlg, command_button_clicked, [{id, ?wxID_OK}]),
+	wxDialog:connect(Dlg, command_button_clicked, [{id, ?wxID_CANCEL}]),
+	
+	%% Show Dialog
+	wxDialog:show(Dlg),
+	
+	%% Handle dialog loop
+	case loop_asn({Dlg, File, Version, Title, Enc}) of
+	{ok, Data} ->
+	    State#state.parse ! {compile, Data};
+	{error, Reason} ->
+	    io:format("~s dialog~n",[Reason]),
+		Data = State#state.asn
+    end,    
+	
+    %% Delete the dialog
+    wxDialog:destroy(Dlg),
+	State#state{asn=Data};
+
+handle_cmd(Dialog, Id, State) ->
+    io:format("Not implemented yet ~p (~p) ~n",[Dialog, Id]),
+	State.
+   
+scan_asn() ->
+	Dir = filename:dirname(code:which(?MODULE)),				%% Directory
+	Src = filename:join([Dir, "../asn"]), 						%% ASN.1 Directory
+	case file:list_dir(Src) of
+	{ok, Files} -> scan_asn(Files, Src, []);					%% Read cfg files
+	{error, Reason}  -> {error, Reason}
 	end.
 
-hex_line(<<H/binary>>, Offset) when size(H) < 16 ->
-	Off = io_lib:format("~8.16.0B  ",[Offset]),
-	Data = [io_lib:format("~2.16.0B ", [X]) || X <- binary_to_list(H)],
-	Rest = io_lib:format("~s",[empty(16-size(H))]),
-	Ascii = io_lib:format(" ~s~n",[to_ascii(H, [])]),
-	{ok, [Off|[Data|[Rest|[Ascii]]]], <<>>, Offset + size(H)};
-hex_line(<<H:16/binary, T/binary>>, Offset) ->
-	Off = io_lib:format("~8.16.0B  ",[Offset]),
-	Data = [io_lib:format("~2.16.0B ", [X]) || X <- binary_to_list(H)],
-	Ascii = io_lib:format(" ~s~n",[to_ascii(H, [])]),
-	{ok, [Off|[Data|[Ascii]]], T, Offset + 16};
-hex_line(<<>>, Offset) ->
-	{ok, [], <<>>, Offset}.
-
-indent(0) -> "";												%% no indent
-indent(1) -> "";												%% Compensate for formatting 
-indent(Cnt) -> string:copies(" ", Cnt-1).
-empty(0) -> "";
-empty(Cnt) -> string:copies("   ", Cnt).
-
-to_ascii(<<H:8, T/binary>>, String) when H < 32;
-										 H > 126 ->
-	to_ascii(T,["."|String]);									%% Don't show control codes
-to_ascii(<<H:8, T/binary>>, String) ->
-	to_ascii(T, [H|String]);									%% Add character
-to_ascii(<<>>, String) ->
-	lists:reverse(String).
-
-to_string(Int) when Int < 10 ->
-	"0" ++ integer_to_list(Int);
-to_string(Int) ->
-	integer_to_list(Int).
-
-to_list(D) when is_tuple(D) -> tuple_to_list(D);
-to_list(D) when is_binary(D) -> binary_to_list(D);
-to_list(D) when is_list(D) -> D;
-to_list(D) -> [D].
-
-getDefinition([H|T], Comp) ->
-	case ets:lookup(H, Comp) of
-	[] -> 		getDefinition(T, Comp);
-	[Other] -> 	element(2, Other);
-	_ ->		[]
-	end;
-getDefinition([], _) ->
-	[].
-		
-getChoice(Def, Name) when is_tuple(Def) ->
-	getChoice(element(1, Def), Name);
-getChoice([], _) -> [];
-getChoice([H|_], Name) when element(1,H) == 'ComponentType',
-							H#'ComponentType'.name == Name ->
-	H#'ComponentType'.typespec;
-getChoice([_|T], Name) -> getChoice(T, Name).
-
-get_tag([{'CONTEXT', Tag} | _]) -> Tag;
-get_tag(_Other) -> 0.
-
-%%
-%% Compiled ASN.1 files have no version information included, but it is needed
-%% to handle multiple versions of the same specification.
-%% In order to handle this correctly it is needed to store and retrieve
-%% the files for different versions
-%%
-
-%%
-%% Check if the asn.1 specification as already been compiled 
-%%
-checkASN(Asn) ->
-	%% Extract specification filename without path & extension
-	Base = basename(Asn#asn.file),
-	Src = asn_dir(filename:dirname(code:which(?MODULE)), Base, 
-				  Asn#asn.version, Asn#asn.enc),
-	filelib:is_regular(Src ++ [Base | ".cfg"]).
-
-%%
-%% Store compiled asn.1 specification
-%%
-storeASN(Asn) ->
-	%% Extract specification filename without path & extension
-    Base = basename(Asn#asn.file),						%% Get filename without extension
-	Src = filename:dirname(code:which(?MODULE)),
-	Dest = asn_dir(Src, Base, Asn#asn.version, Asn#asn.enc),
-	%% Copy compiled asn.1 files (.beam & .asn1db) and actual asn.1 file for later use
-	file:make_dir(Dest),	
-	Files = Asn#asn.spec#asn_spec.db,
-	%% Copy relevant files
-	B = Base++".beam",
-	copy_files([B|Files], Src, Dest),
-	New = filename:join([Src, Base++".asn"]),
-	%% Copy ASN.1 spcification
-	file:copy(Asn#asn.file, New),
-	%% Replace file reference with new location
-	A1 = Asn#asn{file=New},
-	%% Create config file
-	C = filename:join([Dest, Base++".cfg"]),
-	file:write_file(C, io_lib:format("~p.~n",[A1])),
-	%% Replace DB filenames with ETS references
-	DB = get_db_ref(Files, Src, []),
-	A1#asn{spec=Asn#asn.spec#asn_spec{db=DB}}.
-
-%%
-%% Retrieve asn.1 specification
-%%
-retrieveASN(Asn) ->
-	%% Extract specification filename without path & extension
-    Base = basename(Asn#asn.file),
-	Dest = filename:dirname(code:which(?MODULE)),
-	Src = asn_dir(Dest, Base, Asn#asn.version, Asn#asn.enc),
-	%% Copy compiled asn.1 files
-	B = Base++".beam",
-	file:copy(filename:join([Src, B]), filename:join([Dest, B])),
-	%% Get config
-	io:format("~p~n",[filename:join([Src, Base++".cfg"])]),
-	{ok, [Asn|_]} = file:consult(filename:join([Src, Base++".cfg"])),
-	%% Replace DB filenames with ETS references
-	DB = get_db_ref(Asn#asn.spec#asn_spec.db, Src, []),
-	Asn#asn{spec=Asn#asn.spec#asn_spec{db=DB}}.
-
-asn_dir(Dir, Base, Version, Enc) ->
-	[Dir | ["/../asn/" |[Base | [$. |[remove(Version,$.) | [$. |[atom_to_list(Enc)]]]]]]].
-
-basename(Data) ->
-	basename(lists:reverse(Data), []).
-basename([], Res) ->
-	Res;
-basename([H|T],_Res) when H == $. ->
-	basename(T, []);
-basename([H|_], Res) when H == $/ ->
-	Res;
-basename([H|T], Res) ->
-	basename(T, [H|Res]).
-
-remove(Data, Token) ->
-	remove(Data, Token, []).
-remove([], _, Res) ->
-	lists:reverse(Res);
-remove([H|T],Token, Res) when H == Token ->
-	remove(T, Token, Res);
-remove([H|T], Token, Res) ->
-	remove(T, Token, [H|Res]).
-
-get_db_ref([H|T], Src, DB) ->
-	{ok, F} = ets:file2tab(filename:join([Src,H])),
-	get_db_ref(T, Src, [F|DB]);
-get_db_ref([], _, DB) ->
-	io:fwrite("  DB references: ~p~n",[DB]),
-	DB.
-	
-copy_files([], _, _) ->
-	ok;
-copy_files([H|T], Src, Dest) ->
-	file:copy(filename:join([Src, H]), filename:join([Dest, H])),
-	copy_files(T, Src, Dest).
-	
-checkDB(File) ->
-	case list_to_binary(lists:reverse(File)) of
-	<<"nsa.set.", _T/binary>> ->							%% Multiple ASN.1 specifications
-		{ok, Data} = file:read_file(File),
-		get_db_files(Data, <<>>, []);
-	_ -> 
-		[File]
+scan_asn([], _, Res) -> Res;
+scan_asn([H|T], Dir, Res) ->
+	FN = Dir ++  [$/|H],
+	case filelib:is_dir(FN) of
+	true ->														%% Get spec
+		Base = easn_parse:basename(H),
+		case file:consult(filename:join(FN, Base++".cfg")) of
+		{error, _} ->		scan_asn(T, Dir, Res);
+		{ok, [Asn|_]} ->	scan_asn(T, Dir, [Asn|Res])
+		end;
+	false ->												
+		scan_asn(T, Dir, Res)									%% Continue
 	end.
 	
-get_db_files(<<>>, <<>>, Files) ->
-	Files;
-get_db_files(<<>>, Line, Files) ->
-	[binary_to_list(Line)|Files];
-get_db_files(<<H:1/binary, T>>, <<>>, Files) when H == 10;
-												  H == 13 ->
-	get_db_files(T, <<>>, Files);
-get_db_files(<<H:1/binary, T>>, Line, Files) when H == 10;
-												  H == 13 ->
-	get_db_files(T, <<>>, [binary_to_list(Line)|Files]).
-								
-updateConfig(File, Asn) ->
-	Dir = filename:dirname(code:which(?MODULE)),
-	FN = filename:join([Dir, "..", lists:concat([?MODULE_STRING, ".cfg"])]),
-	{ok, [Config]} = file:consult(FN),
-	C = newConfig(File, Asn, Config),
-	file:write_file(FN, io_lib:format("~p.~n",[C])).
-
-newConfig({}, Asn, Config) ->
-	Config#config{asn=[Asn|Config#config.asn]};
-newConfig(File, {}, Config) ->
-	Config#config{files=lists:sublist([File|Config#config.files],9)};
-newConfig(File, Asn, Config) ->
-	Config#config{files=lists:sublist([File|Config#config.files],9),
-				  asn=[Asn|Config#config.asn]}.
+get_config() ->	
+	Dir = filename:dirname(code:which(?MODULE)),				%% Directory
+	case file:consult(filename:join([Dir, "..", "easn.cfg"])) of
+	{error, _} ->	#config{files=[]};
+	{ok, [C|_]} ->	C
+	end.
+	
+show(State) ->
+	[{_,{Size, Data}}] = ets:lookup(decoded, 0),
+	Out = State#state.wx#win.hex,
+	wxTextCtrl:appendText(Out, easn_parse:to_hex(Data, 0, [])),
+	show(State, 1, asn).
+show(State, Count, asn) ->
+	case ets:lookup(decoded, Count) of
+	[] -> 														%% Last record
+		ok;
+	[{_, {error, Reason}}] ->										%% Error
+		Out = State#state.wx#win.info,
+		Msg = io_lib:format("~nError: ~s~n",[Reason]),
+		wxTextCtrl:appendText(Out, Msg);
+	[{_, Offset, Rec}] ->													%% Decoded information
+		Out = State#state.wx#win.asn,
+		Spec = State#state.asn#asn.spec,
+		Txt = easn_parse:to_asn(Spec#asn_spec.root, Rec, 0, Spec#asn_spec.db),
+		Msg = io_lib:format("~n~n-- Part ~B~n~n~s~n", [Count, Txt]),
+		wxTextCtrl:appendText(Out, Msg),
+		show(State, Count, xml)
+	end;
+show(State, Count, xml) ->
+	case ets:lookup(decoded, Count) of
+	[] -> 														%% Last record
+		ok;
+	[{_, {error, Reason}}] ->										%% Error
+		Out = State#state.wx#win.info,
+		Msg = io_lib:format("~nError: ~s~n",[Reason]),
+		wxTextCtrl:appendText(Out, Msg);
+	[{_, Offset, Rec}] ->													%% Decoded information
+		Out = State#state.wx#win.xml,
+		Spec = State#state.asn#asn.spec,
+		Txt = easn_parse:to_xml(Spec#asn_spec.root, Rec, 0, Spec#asn_spec.db),
+		Msg = io_lib:format("~n~n-- Part ~B~n~n~s~n", [Count, Txt]),
+		wxTextCtrl:appendText(Out, Msg),
+		show(State, Count+1, asn)
+	end.
