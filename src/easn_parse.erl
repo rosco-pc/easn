@@ -100,6 +100,7 @@ loop(Pid) ->
 		Pid ! {asn_spec, Res},
 		loop(Pid);
 	{close} ->
+		ets:delete(decoded),
 		ok;
 	%% Unknown commands
 	Msg ->
@@ -143,11 +144,11 @@ compile(Asn) ->
 	false -> 
 		Enc = Asn#asn.enc,										%% Encoding rules used
 		ok = asn1ct:compile(ASN_spec,[Enc,undec_rest]),			%% Compile asn.1 specification
-		DBFile = filename:join([Dir, lists:concat([Base, ".asn1db"])]),
+		DBFile = filename:join([Dir, Base++".asn1db"]),
 		{ok, DB} = ets:file2tab(DBFile),						%% Read DB
 		Tag = get_root(DB),										%% Determine 'root' tag
 		ets:delete(DB),
-		DBs = checkDB(ASN_spec),								%% get ALL asn1db files produced
+		DBs = get_db(ASN_spec),									%% get ALL asn1db files for this specification
 		io:format("  Root: ~s~n",[Tag]),
 		S = #asn_spec{db=DBs, mod=list_to_atom(Base), root=Tag},
 		storeASN(Asn#asn{spec=S})
@@ -544,7 +545,18 @@ basename([H|_], Res) when H == $/ ->
 	Res;
 basename([H|T], Res) ->
 	basename(T, [H|Res]).
-
+	
+extension(Data) ->
+	extension(lists:reverse(Data), [], []).
+extension([], Res, Ext) ->
+	lists:flatten(Ext);
+extension([H|T],Res, Ext) when H == $. ->
+	extension(T, [], [H | [Res|[Ext]]]);
+extension([H|_], _Res, Ext) when H == $/ ->
+	lists:flatten(Ext);
+extension([H|T], Res, Ext) ->
+	extension(T, [H|Res], Ext).
+	
 remove(Data, Token) ->
 	remove(Data, Token, []).
 remove([], _, Res) ->
@@ -554,38 +566,40 @@ remove([H|T],Token, Res) when H == Token ->
 remove([H|T], Token, Res) ->
 	remove(T, Token, [H|Res]).
 
+remove_eol(Data) -> no_eol(lists:reverse(Data)).
+no_eol([10|T]) -> lists:reverse(T);
+no_eol(Data) ->		lists:reverse(Data).
+
 get_db_ref([H|T], Src, DB) ->
 	{ok, F} = ets:file2tab(filename:join([Src,H])),
 	get_db_ref(T, Src, [F|DB]);
 get_db_ref([], _, DB) ->
 	io:fwrite("  DB references: ~p~n",[DB]),
 	DB.
-	
+
 copy_files([], _, _) ->
 	ok;
 copy_files([H|T], Src, Dest) ->
 	file:copy(filename:join([Src, H]), filename:join([Dest, H])),
 	copy_files(T, Src, Dest).
 	
-checkDB(File) ->
-	case list_to_binary(lists:reverse(File)) of
-	<<"nsa.set.", _T/binary>> ->							%% Multiple ASN.1 specifications
-		{ok, Data} = file:read_file(File),
-		get_db_files(Data, <<>>, []);
+get_db(File) ->
+	case extension(File) of
+	".set.asn" ->							%% Multiple ASN.1 specifications
+		{ok, Dev} = file:open(File, [read]),
+		get_lines(Dev);
 	_ -> 
-		[File]
+		[basename(File) ++ ".asn1db"]
 	end.
-	
-get_db_files(<<>>, <<>>, Files) ->
-	Files;
-get_db_files(<<>>, Line, Files) ->
-	[binary_to_list(Line)|Files];
-get_db_files(<<H:1/binary, T>>, <<>>, Files) when H == 10;
-												  H == 13 ->
-	get_db_files(T, <<>>, Files);
-get_db_files(<<H:1/binary, T>>, Line, Files) when H == 10;
-												  H == 13 ->
-	get_db_files(T, <<>>, [binary_to_list(Line)|Files]).
+
+get_lines(Dev) ->
+    case io:get_line(Dev, "") of
+    eof  -> 
+		file:close(Dev), 
+		[];
+    Line -> 
+		[basename(Line)++".asn1db" | get_lines(Dev)]
+    end.	
 								
 updateConfig(File, Asn) ->
 	Dir = filename:dirname(code:which(?MODULE)),

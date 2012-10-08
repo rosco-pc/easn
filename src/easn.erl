@@ -233,10 +233,12 @@ loop_asn(State={Dlg, File, Version, Title, Enc}) ->
 		wxTextCtrl:appendText(Title, T),
 		loop_asn(State);
 	#wx{event=#wxCommand{type=command_button_clicked}, id=?wxID_OK} ->
+		E1 = wxRadioBox:getSelection(Enc),
+		E2 = wxRadioBox:getString(Enc, E1),
 		Res = #asn{file=wxFilePickerCtrl:getPath(File),
 				   version=wxTextCtrl:getValue(Version),
 				   title=wxTextCtrl:getValue(Title),
-				   enc=wxRadioBox:getSelection(Enc)},
+				   enc=list_to_atom(string:to_lower(E2))},
   	    io:format("ASN.1 Data ~p~n",[Res]),
 		{ok, Res};
 	#wx{event=#wxCommand{type=command_button_clicked}, id=Id} ->
@@ -255,12 +257,13 @@ loop_asn(State={Dlg, File, Version, Title, Enc}) ->
 handle_cmd(_, ?wxID_OPEN, State) ->
 	io:format("Select file: ",[]),
 	Frame = State#state.wx#win.frame,
-    FD = wxFileDialog:new(Frame,[{style, ?wxFD_OPEN bor ?wxFD_FILE_MUST_EXIST}]),
+    FD = wxFileDialog:new(Frame,[{style, ?wxFD_OPEN bor ?wxFD_FILE_MUST_EXIST},
+								 {wildCard, "ASN files (*.asn;*.asn1)|*.asn;*.asn1|All Files (*.*)|*"}]),
     S1 = case wxDialog:showModal(FD) of
 	?wxID_OK ->
 		FN = wxFileDialog:getPath(FD),
 		io:format("~s~n",[FN]),
-		State#state.parse ! {parse, {FN, State#state.asn#asn.spec}},
+		easn_parse:parse(FN, State#state.asn#asn.spec),
 		wxTreeCtrl:deleteAllItems(State#state.wx#win.comp),
 		wxTreeCtrl:addRoot(State#state.wx#win.comp, FN),
 		State#state{file=FN};
@@ -343,16 +346,23 @@ handle_cmd(importASN, _, State) ->
 	
 	%% Handle dialog loop
 	case loop_asn({Dlg, File, Version, Title, Enc}) of
-	{ok, Data} ->
-	    State#state.parse ! {compile, Data};
+	{ok, Asn} ->
+	    Res = easn_parse:compile(Asn),
+		Msg = "ASN.1 specification successfuly compiled\n",
+		Out = State#state.wx#win.info,
+		wxTextCtrl:appendText(Out, Msg),
+		%% Add new ASN.1 spec to dropdown box and select it
+		T = Res#asn.title,
+		Chooser = State#state.wx#win.choice,
+		wxComboBox:setSelection(Chooser, wxComboBox:append(Chooser, T, Res));
 	{error, Reason} ->
 	    io:format("~s dialog~n",[Reason]),
-		Data = State#state.asn
+		Res = State#state.asn
     end,    
 	
     %% Delete the dialog
     wxDialog:destroy(Dlg),
-	State#state{asn=Data};
+	State#state{asn=Res};
 
 handle_cmd(Dialog, Id, State) ->
     io:format("Not implemented yet ~p (~p) ~n",[Dialog, Id]),

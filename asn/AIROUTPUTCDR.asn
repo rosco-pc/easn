@@ -1,0 +1,360 @@
+-- ASN.1 Formal Description
+AIROUTPUTCDR {iso(1) member-body(2) bsi(826) disc(0) ericsson(1249) mobileDomain (0) charging (5) aIROUTPUTCDR (1) asn1Module (0)}
+DEFINITIONS IMPLICIT TAGS ::=
+BEGIN
+EXPORTS DetailOutputRecord;
+-- Detail Output Record
+DetailOutputRecord ::= CHOICE {
+-- tags [0] reserved
+-- tags [1] reserved
+-- tags [2] reserved
+-- tags [3] reserved
+	adjustmentRecordV2 [4] AdjustmentRecordV2,
+	offlinepromotionRecordV2 [5] OfflinePromotionRecordV2,
+	refillRecordV2 [6] RefillRecordV2,
+	errorRecordV2 [7] ErrorRecordV2
+}
+-- Adjustment Record V2
+AdjustmentRecordV2 ::= SEQUENCE {
+	originNodeType [0] NodeType,
+	originHostName [1] IDString,
+	originFileID [2] IDString OPTIONAL,
+	originTransactionID [3] TransactionID,
+	originOperatorID [4] IDString OPTIONAL,
+	originTimeStamp [5] TimeStamp,
+	hostName [6] NodeID,
+	localSequenceNumber [7] LocalSequenceNumber,
+	timeStamp [8] TimeStamp,
+	currentServiceClass [9] ServiceClass,
+	transactionType [10] TransactionType OPTIONAL,
+	transactionCode [11] TransactionCode OPTIONAL,
+	transactionAmount [12] MoneyAmount OPTIONAL,
+	transactionCurrency [13] Currency,
+	accountNumber [14] NumberString,
+	accountCurrency [15] Currency OPTIONAL,
+	adjustmentAmount [16] MoneyAmount OPTIONAL,
+	subscriberNumber [17] NumberString OPTIONAL,
+	accountBalance [18] MoneyAmount OPTIONAL,
+	negativeBalanceBarringDate [19] Date OPTIONAL,
+	accountFlagsBefore [20] AccountFlags,
+	accountFlagsAfter [21] AccountFlags,
+	accountGroupId [22] AccountGroupId OPTIONAL,
+	externalData1 [23] ExternalDataString OPTIONAL,
+	externalData2 [24] ExternalDataString OPTIONAL,
+	creditClearancePeriodBefore [25] INTEGER OPTIONAL,
+	creditClearancePeriodAfter [26] INTEGER OPTIONAL,
+	serviceFeeDateBefore [27] Date OPTIONAL,
+	serviceFeeDateAfter [28] Date OPTIONAL,
+	serviceFeeDaysSurplus [29] INTEGER OPTIONAL,
+	dedicatedAccounts [30] SEQUENCE (SIZE (1..255)) OF AdjustmentDedicatedAccountV2 OPTIONAL,
+	...
+}
+AdjustmentDedicatedAccountV2 ::= SEQUENCE {
+	dedicatedAccountID [0] DedicatedAccountID,
+	campaignIdentifier [1] CampaignIdentifier OPTIONAL,
+	transactionAmount [2] MoneyAmount OPTIONAL,
+	adjustmentAmount [3] MoneyAmount OPTIONAL,
+	accountBalance [4] MoneyAmount OPTIONAL,
+	accountExpiryDateBefore [5] Date OPTIONAL,
+	accountExpiryDateAfter [6] Date OPTIONAL,
+--PC:05183
+	accountStartDateBefore [7] Date OPTIONAL,
+	accountStartDateAfter [8] Date OPTIONAL,
+--end PC:05183
+--PC:05182
+	mainDedicatedAccountID [9] DedicatedAccountID OPTIONAL,
+--end PC:05182
+--PC:05950
+	offerIdentifier [10] INTEGER OPTIONAL,
+--end PC:5950
+--PC:06219
+	dedicatedAccountUnit [11] UnitType OPTIONAL,
+--end PC:06219
+	...
+}
+-- OfflinePromotion Record V2
+OfflinePromotionRecordV2 ::= SEQUENCE {
+	originNodeType [0] NodeType,
+	originHostName [1] IDString,
+	originFileID [2] IDString OPTIONAL,
+	originTransactionID [3] TransactionID,
+	originOperatorID [4] IDString OPTIONAL,
+	originTimeStamp [5] TimeStamp,
+	hostName [6] NodeID,
+	localSequenceNumber [7] LocalSequenceNumber,
+	timeStamp [8] TimeStamp,
+	currentServiceClass [9] ServiceClass,
+	transactionType [10] TransactionType OPTIONAL,
+	transactionCode [11] TransactionCode OPTIONAL,
+	transactionAmount [12] MoneyAmount,
+	transactionCurrency [13] Currency,
+	accountNumber [14] NumberString,
+	accountCurrency [15] Currency OPTIONAL,
+	promotionAmountConverted [16] MoneyAmount OPTIONAL,
+	promotionDivisionAmount [17] MoneyAmount OPTIONAL,
+	subscriberNumber [18] NumberString OPTIONAL,
+	accountBalance [19] MoneyAmount OPTIONAL,
+	accountFlagsBefore [20] AccountFlags,
+	accountFlagsAfter [21] AccountFlags,
+	accountGroupId [22] AccountGroupId OPTIONAL,
+	externalData1 [23] ExternalDataString OPTIONAL,
+	externalData2 [24] ExternalDataString OPTIONAL,
+	dedicatedAccounts [25] SEQUENCE (SIZE (1..255)) OF OfflinePromotionDedicatedAccountV2 OPTIONAL,
+	selectionTreeParameter [26] SEQUENCE OF SelectionTreeParameter,
+	treeDefinedFields [27] SEQUENCE OF TreeDefinedField OPTIONAL,
+	activationDate [28] Date OPTIONAL,
+	accountDivisionID [29] AccountDivisionID OPTIONAL,
+	communityID1 [30] INTEGER OPTIONAL,
+	communityID2 [31] INTEGER OPTIONAL,
+	communityID3 [32] INTEGER OPTIONAL,
+	welcomeStatus [33] BOOLEAN OPTIONAL,
+	serviceOffering [34] INTEGER OPTIONAL,
+	usageAccumulator [35] SEQUENCE (SIZE (1..255)) OF OfflinePromotionUsageAccumulator OPTIONAL,
+	accountBalanceBefore [36] MoneyAmount OPTIONAL,
+	...
+}
+OfflinePromotionDedicatedAccountV2 ::= SEQUENCE {
+	dedicatedAccountID [0] DedicatedAccountID,
+	campaignIdentifier [1] CampaignIdentifier OPTIONAL,
+	promotionDivisionAmount [2] MoneyAmount OPTIONAL,
+	accountBalance [3] MoneyAmount OPTIONAL,
+	accountExpiryDate [4] Date OPTIONAL,
+	accountBalanceBefore [5] MoneyAmount OPTIONAL,
+	accountExpiryDateBefore [6] Date OPTIONAL,
+	...
+}
+OfflinePromotionUsageAccumulator ::= SEQUENCE {
+	usageAccumulatorID [0] INTEGER,
+	usageAccumulatorValue [1] INTEGER,
+	...
+}
+
+-- Refill Record V2
+
+RefillRecordV2 ::= SEQUENCE {
+	originNodeType [0] NodeType,
+	originHostName [1] IDString,
+	originFileID [2] IDString OPTIONAL,
+	originTransactionID [3] TransactionID,
+	originOperatorID [4] IDString OPTIONAL,
+	originTimeStamp [5] TimeStamp,
+	hostName [6] NodeID,
+	localSequenceNumber [7] LocalSequenceNumber,
+	timeStamp [8] TimeStamp,
+	currentServiceClass [9] ServiceClass,
+	voucherBasedRefill [10] BOOLEAN,
+	transactionType [11] TransactionType OPTIONAL,
+	transactionCode [12] TransactionCode OPTIONAL,
+	transactionAmount [13] MoneyAmount OPTIONAL,
+	transactionCurrency [14] Currency OPTIONAL,
+	refillAmountConverted [15] MoneyAmount OPTIONAL,
+	refillDivisionAmount [16] MoneyAmount OPTIONAL,
+	refillType [17] RefillTypeV2,
+	refillProfileID [18] RefillProfileID OPTIONAL,
+	segmentationID [19] SegmentationID OPTIONAL,
+	voucherSerialNumber [20] VoucherString OPTIONAL,
+	voucherGroupID [21] VoucherGroupID OPTIONAL,
+	accountNumber [22] NumberString,
+	accountCurrency [23] Currency OPTIONAL,
+	subscriberNumber [24] NumberString OPTIONAL,
+	promotionAnnouncementCode [25] PromotionAnnouncementCode OPTIONAL,
+	accountInformationBeforeRefill [26] AccountInformation,
+	accountInformationAfterRefill [27] AccountInformation,
+	refillPromoDivisionAmount [28] MoneyAmount OPTIONAL,
+	supervisionDaysPromoPart [29] INTEGER OPTIONAL,
+	supervisionDaysSurplus [30] INTEGER OPTIONAL,
+	serviceFeeDaysPromoPart [31] INTEGER OPTIONAL,
+	serviceFeeDaysSurplus [32] INTEGER OPTIONAL,
+	maximumServiceFeePeriod [33] INTEGER OPTIONAL,
+	maximumSupervisionPeriod [34] INTEGER OPTIONAL,
+	activationDate [35] Date OPTIONAL,
+	welcomeStatus [36] BOOLEAN,
+	voucherAgent [37] Agent OPTIONAL,
+	promotionPlanAllocStartDate [38] Date OPTIONAL,
+	accountGroupId [39] AccountGroupId OPTIONAL,
+	externalData1 [40] ExternalDataString OPTIONAL,
+	externalData2 [41] ExternalDataString OPTIONAL,
+	externalData3 [42] ExternalDataString OPTIONAL,
+	externalData4 [43] ExternalDataString OPTIONAL,
+	locationNumber [44] LocationNumber OPTIONAL,
+	voucherActivationCode [45] VoucherString OPTIONAL,
+	accountCurrencyCleared [46] Currency OPTIONAL,
+	ignoreServiceClassHierarchy [47] BOOLEAN OPTIONAL,
+	selectionTreeParameter [48] SEQUENCE OF SelectionTreeParameter,
+	treeDefinedFields [49] SEQUENCE OF TreeDefinedField OPTIONAL,
+	accountHomeRegion [50] RegionType OPTIONAL,
+	subscriberRegion [51] RegionType OPTIONAL,
+	voucherRegion [52] RegionType OPTIONAL,
+	promotionPlanAllocEndDate [53] Date OPTIONAL,
+	requestedRefillType [54] RefillTypeV2 OPTIONAL,
+	...
+}
+AccountInformation ::= SEQUENCE {
+	accountFlags [0] AccountFlags,
+	accountBalance [1] MoneyAmount OPTIONAL,
+	accumulatedRefillValue [2] MoneyAmount OPTIONAL,
+	accumulatedRefillCounter [3] INTEGER OPTIONAL,
+	accumulatedProgressionValue [4] MoneyAmount OPTIONAL,
+	accumulatedProgressionCounter [5] INTEGER OPTIONAL,
+	creditClearancePeriod [6] INTEGER OPTIONAL,
+	dedicatedAccounts [7] SEQUENCE (SIZE (1..255)) OF RefillDedicatedAccountV2 OPTIONAL,
+	promotionPlan [8] PromotionPlanID OPTIONAL,
+	permanentServiceClass [9] ServiceClass,
+	temporaryServiceClass [10] ServiceClass OPTIONAL,
+	temporaryServiceClassExpiryDate [11] Date OPTIONAL,
+	refillOption [12] RefillOption OPTIONAL,
+	serviceFeeExpiryDate [13] Date OPTIONAL,
+	serviceRemovalGracePeriod [14] INTEGER OPTIONAL,
+	serviceOffering [15] INTEGER OPTIONAL,
+	supervisionExpiryDate [16] Date OPTIONAL,
+	usageAccumulator [17] SEQUENCE (SIZE (1..255)) OF RefillUsageAccumulator OPTIONAL,
+	communityID1 [18] INTEGER OPTIONAL,
+	communityID2 [19] INTEGER OPTIONAL,
+	communityID3 [20] INTEGER OPTIONAL,
+	...
+}
+RefillUsageAccumulator ::= SEQUENCE {
+	usageAccumulatorID [0] INTEGER,
+	usageAccumulatorValue [1] INTEGER,
+	...
+}
+RefillDedicatedAccountV2 ::= SEQUENCE {
+	dedicatedAccountID [0] DedicatedAccountID,
+	campaignIdentifier [1] CampaignIdentifier OPTIONAL,
+	refillDivisionAmount [2] MoneyAmount OPTIONAL,
+	refillPromoDivisionAmount [3] MoneyAmount OPTIONAL,
+	accountBalance [4] MoneyAmount OPTIONAL,
+	accountExpiryDate [5] Date OPTIONAL,
+	clearedAccountValue [6] MoneyAmount OPTIONAL,
+--PC:06219
+	dedicatedAccountUnit [7] UnitType OPTIONAL,
+--end PC:06219
+	...
+}
+
+-- Error Record V2
+
+ErrorRecordV2 ::= SEQUENCE {
+	originNodeType [0] NodeType,
+	originHostName [1] IDString,
+	originFileID [2] IDString OPTIONAL,
+	originTransactionID [3] TransactionID,
+	originOperatorID [4] IDString OPTIONAL,
+	originTimeStamp [5] TimeStamp,
+	hostName [6] NodeID,
+	localSequenceNumber [7] LocalSequenceNumber,
+	timeStamp [8] TimeStamp,
+	currentServiceClass [9] ServiceClass OPTIONAL,
+	operation [10] OperationV2,
+	transactionType [11] TransactionType OPTIONAL,
+	transactionCode [12] TransactionCode OPTIONAL,
+	voucherSerialNumber [13] VoucherString OPTIONAL,
+	accountNumber [14] NumberString OPTIONAL,
+	subscriberNumber [15] NumberString,
+	refillFraudCounter [16] INTEGER OPTIONAL,
+	refillUnbarTimeStamp [17] TimeStamp OPTIONAL,
+	activationCode [18] VoucherString OPTIONAL,
+	errorCode [19] ErrorCode,
+	transactionAmount [20] MoneyAmount OPTIONAL,
+	transactionCurrency [21] Currency OPTIONAL,
+	locationNumber [22] LocationNumber OPTIONAL,
+	refillType [23] RefillTypeV2 OPTIONAL,
+	voucherBasedRefill [24] BOOLEAN OPTIONAL,
+	accountHomeRegion [25] RegionType OPTIONAL,
+	subscriberRegion [26] RegionType OPTIONAL,
+	voucherRegion [27] RegionType OPTIONAL,
+	requestedRefillType [28] RefillTypeV2 OPTIONAL,
+	...
+}
+
+-- Parameter Types
+
+AccountDivisionID ::= IA5String (SIZE (1..2))
+AccountFlags ::= IA5String (SIZE(8))
+AccountGroupId ::= INTEGER (0..2147483647)
+-- 0 Undefined
+-- 1..2147483647 AccountGroupId
+Agent ::= IA5String (SIZE (1..8))
+CampaignIdentifier ::= INTEGER (1..99999999)
+Currency ::= IA5String (SIZE (3))
+Date ::= IA5String (SIZE (8))
+DedicatedAccountID ::= INTEGER (1..2147483647)
+ErrorCode ::= ENUMERATED {
+	otherError (0),
+	internalSystemFault (1),
+	subscriberNotFound (2),
+	accountBarredFromRefill (3),
+	temporaryBlocked (4),
+	dedicatedAccountNotAllowed (5),
+	dedicatedAccountNegative (6),
+	voucherStatusUsedBySame (7),
+	voucherStatusUsedByDifferent (8),
+	voucherStatusUnavailable (9),
+	voucherStatusExpired (10),
+	voucherStatusStolenOrMissing (11),
+	voucherStatusDamaged (12),
+	voucherStatusPending (13),
+	voucherTypeNotAccepted (14),
+	voucherGroupServiceClassErr (15),
+	serviceClassHierarchyErr (16),
+	serviceClassChangeNotAllowed (17),
+	valueVoucherNotActive (18),
+	invalidActivationNumber (19),
+	invalidPaymentProfile (20),
+	supervisionPeriodTooLong (21),
+	serviceFeePeriodTooLong (22),
+	maxCreditLimitExceeded (23),
+	belowMinimumBalance (24),
+	accountUpdateResultUnknown (25)
+}
+ExternalDataString ::= IA5String (SIZE (1..255))
+IDString ::= IA5String (SIZE (1..255))
+Integer64 ::= INTEGER (-9223372036854775808..9223372036854775807)
+LocalSequenceNumber ::= INTEGER (0..4294967295)
+LocationNumber ::= IA5String (SIZE (1..20))
+MoneyAmount ::= IA5String (SIZE (1..17))
+NodeID ::= IA5String (SIZE (1..20))
+NodeType ::= IA5String (SIZE (1..8))
+NumberString ::= IA5String (SIZE (1..30))
+OperationV2 ::= ENUMERATED {
+	undefined (0),
+	refill (1),
+	adjustment (2),
+	offlinePromotion (3)
+}
+Percentage ::= IA5String (SIZE (1..13))
+PromotionAnnouncementCode ::= INTEGER (0..99)
+PromotionPlanID ::= IA5String (SIZE (1..4))
+RefillOption ::= INTEGER (1..999)
+RefillProfileID ::= IA5String (SIZE (1..4))
+RefillTypeV2 ::= INTEGER (0..999)
+RegionType ::= INTEGER (0..999)
+SegmentationID ::= IA5String (SIZE (1..4))
+ServiceClass ::= INTEGER (0..9999)
+SelectionTreeID ::= IA5String (SIZE (1..5))
+SelectionTreeParameter ::= SEQUENCE
+{
+	selectionTreeID [0] SelectionTreeID,
+	selectionTreeVersion [1] UTF8String,
+	...
+}
+TimeStamp ::= IA5String (SIZE (19))
+TransactionCode ::= IA5String (SIZE (1..30))
+TransactionID ::= IA5String (SIZE (1..20))
+TransactionType ::= IA5String (SIZE (1..30))
+TreeDefinedField ::= SEQUENCE
+{
+	parameterID [0] UTF8String,
+	parameterValue [1] TreeDefinedFieldType
+}
+TreeDefinedFieldType ::= CHOICE
+{
+	boolean [0] BOOLEAN,
+	integer64 [1] Integer64,
+	string [2] UTF8String,
+	...
+}
+UnitType ::= INTEGER (0..2147483647)
+VoucherGroupID ::= IA5String (SIZE(1..4))
+VoucherString ::= IA5String (SIZE(8..20))
+END

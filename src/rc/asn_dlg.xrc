@@ -20,6 +20,8 @@
                   <object class="sizeritem">
                     <object class="wxFilePickerCtrl" name="file">
                       <size>274,-1</size>
+                      <wildcard>ASN.1 Specification (*.asn;*.asn1)|*.asn;*.asn1|All files|*</wildcard>
+                      <style>wxFLP_OPEN|wxFLP_FILE_MUST_EXIST|wxFLP_DEFAULT_STYLE</style>
                     </object>
                     <option>1</option>
                     <flag>wxALL|wxEXPAND</flag>
@@ -78,6 +80,7 @@
             <option>2</option>
             <flag>wxALL|wxEXPAND</flag>
             <border>5</border>
+            <ratio>2</ratio>
           </object>
           <object class="sizeritem">
             <object class="wxRadioBox" name="enc">
@@ -95,6 +98,7 @@
             <option>1</option>
             <flag>wxALL|wxEXPAND|wxALIGN_CENTRE_VERTICAL|wxALIGN_CENTRE_HORIZONTAL</flag>
             <border>5</border>
+            <ratio>1</ratio>
           </object>
           <object class="sizeritem">
             <object class="wxStdDialogButtonSizer">
@@ -117,6 +121,7 @@
             <option>1</option>
             <flag>wxALL|wxEXPAND|wxGROW</flag>
             <border>5</border>
+            <ratio>1</ratio>
           </object>
           <cols>1</cols>
           <rows>3</rows>
