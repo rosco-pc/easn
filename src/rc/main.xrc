@@ -139,7 +139,7 @@
                         <object class="wxBoxSizer">
                           <orient>wxVERTICAL</orient>
                           <object class="sizeritem">
-                            <object class="wxTextCtrl" name="box">
+                            <object class="wxTextCtrl" name="out_info">
                               <font>
                                 <size>9</size>
                                 <style>normal</style>
@@ -149,12 +149,14 @@
                                 <face>Consolas</face>
                                 <encoding>WINDOWS-1252</encoding>
                               </font>
+                              <style>wxTE_MULTILINE|wxTE_READONLY</style>
                             </object>
                             <option>1</option>
                             <flag>wxALL|wxEXPAND</flag>
                             <border>5</border>
                           </object>
                         </object>
+                        <size>820,70</size>
                       </object>
                       <orientation>horizontal</orientation>
                       <sashpos>400</sashpos>
@@ -171,15 +173,17 @@
               <sashpos>180</sashpos>
             </object>
             <option>1</option>
-            <flag>wxALL|wxEXPAND</flag>
+            <flag>wxALL|wxEXPAND|wxGROW</flag>
             <border>0</border>
-            <minsize>800,500</minsize>
+            <minsize>900,600</minsize>
+            <ratio>1</ratio>
           </object>
           <orient>wxVERTICAL</orient>
         </object>
         <option>1</option>
-        <flag>wxALL|wxEXPAND</flag>
+        <flag>wxALL|wxEXPAND|wxGROW</flag>
         <border>0</border>
+        <ratio>1</ratio>
       </object>
     </object>
     <title>ASN.1 Viewer/Editor</title>

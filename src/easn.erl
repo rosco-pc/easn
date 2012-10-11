@@ -91,11 +91,12 @@ start() ->
 	add_recent(Recent, Config#config.files),
 	
 	wxFrame:show(Frame),										%% Show frame
-	Pid = spawn(easn_parse, start, [self()]),							%% Start the parser
-	loop(#state{wx=W,parse=Pid,asn=Asn1}),					%% Handle GUI events
+	%Pid = spawn(easn_parse, start, [self()]),							%% Start the parser
+	%loop(#state{wx=W,parse=Pid,asn=Asn1}),					%% Handle GUI events
+	loop(#state{wx=W,asn=Asn1}),					%% Handle GUI events
 	io:format("Close wx~n",[]),
-    wx:destroy(),												%% Stop wx server.
-	exit(Pid, kill).											%% Stop parser
+    wx:destroy().												%% Stop wx server.
+	%exit(Pid, kill).											%% Stop parser
 
 rc_dir(File) ->
 	SelfDir = filename:dirname(code:which(?MODULE)),
@@ -126,9 +127,13 @@ connect(Frame) ->
     Menus = [importASN, options],
     [connect_xrcid(Str,Frame) || Str <- Menus],
     %% Handle combobox events
+    %ID = wxXmlResource:getXRCID(atom_to_list("choose")),
+    %put(ID, "choose"),
 	Chooser = wxXmlResource:xrcctrl(Frame, "choose", wxComboBox),
     wxComboBox:connect(Chooser, command_combobox_selected), 
     %% Handle treelist events
+    %ID = wxXmlResource:getXRCID(atom_to_list("components")),
+    %put(ID, "components"),
 	Comp = wxXmlResource:xrcctrl(Frame, "components", wxTreeCtrl),
     wxTreeCtrl:connect(Comp, command_tree_item_collapsed),
     wxTreeCtrl:connect(Comp, command_tree_item_expanded),
@@ -264,8 +269,7 @@ handle_cmd(_, ?wxID_OPEN, State) ->
 		FN = wxFileDialog:getPath(FD),
 		io:format("~s~n",[FN]),
 		easn_parse:parse(FN, State#state.asn#asn.spec),
-		wxTreeCtrl:deleteAllItems(State#state.wx#win.comp),
-		wxTreeCtrl:addRoot(State#state.wx#win.comp, FN),
+		show(State#state{file=FN}),
 		State#state{file=FN};
 	_ ->
 		io:format("-~n"),
@@ -399,38 +403,43 @@ get_config() ->
 	
 show(State) ->
 	[{_,{Size, Data}}] = ets:lookup(decoded, 0),
+	%% Clear text fields
+	wxTextCtrl:clear(State#state.wx#win.asn),
+	wxTextCtrl:clear(State#state.wx#win.xml),
+	wxTextCtrl:clear(State#state.wx#win.hex),
+	% Clear component list
+	wxTreeCtrl:deleteAllItems(State#state.wx#win.comp),
+	%% Add filename as root
+	wxTreeCtrl:addRoot(State#state.wx#win.comp, State#state.file),
 	Out = State#state.wx#win.hex,
 	wxTextCtrl:appendText(Out, easn_parse:to_hex(Data, 0, [])),
-	show(State, 1, asn).
-show(State, Count, asn) ->
+	add_components(State,1),
+	show(State, 1).
+show(State, Count) ->
 	case ets:lookup(decoded, Count) of
 	[] -> 														%% Last record
 		ok;
-	[{_, {error, Reason}}] ->										%% Error
+	[{_, {error, Reason}}] ->									%% Error
 		Out = State#state.wx#win.info,
 		Msg = io_lib:format("~nError: ~s~n",[Reason]),
 		wxTextCtrl:appendText(Out, Msg);
-	[{_, Offset, Rec}] ->													%% Decoded information
-		Out = State#state.wx#win.asn,
+	[{_, Offset, Rec}] ->										%% Decoded information
+		case Count of
+		1 -> io:format("~p~n"
 		Spec = State#state.asn#asn.spec,
-		Txt = easn_parse:to_asn(Spec#asn_spec.root, Rec, 0, Spec#asn_spec.db),
-		Msg = io_lib:format("~n~n-- Part ~B~n~n~s~n", [Count, Txt]),
-		wxTextCtrl:appendText(Out, Msg),
-		show(State, Count, xml)
-	end;
-show(State, Count, xml) ->
-	case ets:lookup(decoded, Count) of
-	[] -> 														%% Last record
-		ok;
-	[{_, {error, Reason}}] ->										%% Error
-		Out = State#state.wx#win.info,
-		Msg = io_lib:format("~nError: ~s~n",[Reason]),
-		wxTextCtrl:appendText(Out, Msg);
-	[{_, Offset, Rec}] ->													%% Decoded information
-		Out = State#state.wx#win.xml,
-		Spec = State#state.asn#asn.spec,
-		Txt = easn_parse:to_xml(Spec#asn_spec.root, Rec, 0, Spec#asn_spec.db),
-		Msg = io_lib:format("~n~n-- Part ~B~n~n~s~n", [Count, Txt]),
-		wxTextCtrl:appendText(Out, Msg),
-		show(State, Count+1, asn)
+		%% ASN.1 output
+		T1 = easn_parse:to_asn(Spec#asn_spec.root, Rec, 0, Spec#asn_spec.db),
+		M1 = io_lib:format("~n~n-- Part ~B~n~n~s~n", [Count, T1]),
+		Asn = State#state.wx#win.asn,
+		%A1 = wxTextCtrl:getInsertionPoint(Asn),
+		wxTextCtrl:appendText(Asn, M1),
+		%A2 =  wxTextCtrl:getInsertionPoint(Asn),
+		%% XML output
+		T2 = easn_parse:to_xml(Spec#asn_spec.root, Rec, 0, Spec#asn_spec.db),
+		M2 = io_lib:format("~n~n<!-- Part ~B -->~n~n~s~n", [Count, T2]),
+		Xml = State#state.wx#win.xml,
+		%X1 = wxTextCtrl:getInsertionPoint(Xml),
+		wxTextCtrl:appendText(Xml, M2),
+		%X2 =  wxTextCtrl:getInsertionPoint(Xml),
 	end.
+	

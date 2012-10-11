@@ -24,7 +24,7 @@
 				len}).			% Size of parsed file
 
 %% Record for window references
--record(win, {frame,				% Frame reference
+-record(win, {frame,			% Frame reference
 			  asn,				% ASN.1 view wxTxtCtrl reference
 			  xml,				% XML view wxTxtCtrl reference
 			  hex,				% Hex view wxTxtCtrl reference
@@ -32,8 +32,8 @@
 			  comp,				% Components wxTreeCtrl reference
 			  choice}).			% ASN.1 wxComboBox reference
 				 
-%% Parse result
--record(result, {data,			% Raw output from parsing
+%% Offsets into different text fileds
+-record(offset, {count,			% 
 				 hex,			% Offset in orignal file as {start, stop}
 				 asn,			% Offset in ASN.1 window as {start, stop}
 				 xml}).			% Offset in XML window as {start, stop}

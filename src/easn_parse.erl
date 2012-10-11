@@ -40,12 +40,11 @@
 %%
 %% Start server
 %%
-start(Pid) ->
-	try ets:new(decoded, [named_table])
-	catch
-	_ -> ets:delete_all_objects(decoded)
-	end,
-	loop(Pid).
+%start(Pid) ->
+%	try ets:new(decoded, [named_table])
+%	catch
+%	end,
+%	loop(Pid).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Helper functions
@@ -117,7 +116,10 @@ loop(Pid) ->
 %% Asn - ASN.1 Specification details {codec module, root tag}
 %%
 parse(FN, Asn_spec) ->
-	ets:delete_all_objects(decoded),							%% Clear table
+	try ets:new(decoded, [named_table])
+	catch
+	error:_ -> ets:delete_all_objects(decoded)
+	end,
 	case filelib:is_regular(FN) of
 	  true ->
 		{ok, Bytes} = file:read_file(FN),						%% Read file
@@ -192,15 +194,15 @@ get_root(DB, Key, Root, Tag) ->
 parse_asn(_, Count, <<>>, _, _) -> {ok, Count};					%% Done with parsing
 parse_asn(Spec, Count, <<H,T/binary>>, Offset, Size) when H==0 -> %% Skip filler bytes
 	parse_asn(Spec, Count, T, Offset+1, Size); 
-parse_asn(Spec, Count, Bytes, Offset, Size) ->					%% Parse ASN.1 file
+parse_asn(Spec, Count, Bytes, Start, Size) ->					%% Parse ASN.1 file
 	Mod = Spec#asn_spec.mod,
 	case Mod:decode(Spec#asn_spec.root, Bytes) of
 		{ok, Dec, T} ->											%% Decoded data
-			Off = Size - Offset - size(T),
-			ets:insert(decoded, {Count, {Offset, Off} , Dec}),
-			parse_asn(Spec, Count + 1, T, Off, Size);					%% Continue parsing
+			End = Start + size(T),
+			ets:insert(decoded, {Count, {Start, End} , Dec}),
+			parse_asn(Spec, Count + 1, T, End, Size);			%% Continue parsing
 		{ok, Dec} ->											%% Last piece of decoded data
-			ets:insert(decoded, {Count, {Offset, Size} , Dec}),
+			ets:insert(decoded, {Count, {Start, Size} , Dec}),
 			{ok, Count};
 		Other ->												%% Error
 			ets:insert(decoded, {Count, Other}),
@@ -404,7 +406,15 @@ write_xml_type(Data, Comp, _, Indent, _)  ->
 	Name = Comp#'ComponentType'.name,
 	io_lib:format( "~s<~s>~p</~s>~n",[indent(Indent), Name, Data, Name]).
 	 
-
+%%
+%% Provide a hexadecimal view of the original file
+%% fixed format: 
+%%  Offset  Data  ASCII 
+%%
+%% Offset is a 8 byte field
+%% Data   show 16 bytes of separated with a space
+%% ASCII  Ascii representation of the data
+%%
 to_hex(Bytes, Offset, String) ->
 	case hex_line(Bytes, Offset) of
 	{ok, Line, <<>>, _Offset} ->
@@ -493,25 +503,26 @@ checkASN(Asn) ->
 %%
 storeASN(Asn) ->
 	%% Extract specification filename without path & extension
-    Base = basename(Asn#asn.file),						%% Get filename without extension
+    Base = basename(Asn#asn.file),								%% Get filename without extension
 	Src = filename:dirname(code:which(?MODULE)),
 	Dest = asn_dir(Src, Base, Asn#asn.version, Asn#asn.enc),
+	%% Delete *.erl and *.hrl files created as part of the compile
+	file:delete(filename:join([Src, Base++".erl"])),
+	file:delete(filename:join([Src, Base++".hrl"])),
 	%% Copy compiled asn.1 files (.beam & .asn1db) and actual asn.1 file for later use
-	file:make_dir(Dest),	
-	Files = Asn#asn.spec#asn_spec.db,
-	%% Copy relevant files
-	B = Base++".beam",
-	copy_files([B|Files], Src, Dest),
-	New = filename:join([Src, Base++".asn"]),
+	file:make_dir(Dest),										%% Create directory
+	A = Asn#asn.spec#asn_spec.db,								%% .asn1db files
+	B = Base++".beam",											%% .beam file
+	copy_files([B|A], Src, Dest),							
 	%% Copy ASN.1 spcification
+	New = filename:join([Src, Base++".asn"]),
 	file:copy(Asn#asn.file, New),
-	%% Replace file reference with new location
 	A1 = Asn#asn{file=New},
 	%% Create config file
 	C = filename:join([Dest, Base++".cfg"]),
 	file:write_file(C, io_lib:format("~p.~n",[A1])),
 	%% Replace DB filenames with ETS references
-	DB = get_db_ref(Files, Src, []),
+	DB = get_db_ref(A, Src, []),
 	A1#asn{spec=Asn#asn.spec#asn_spec{db=DB}}.
 
 %%
@@ -534,7 +545,10 @@ retrieveASN(Asn) ->
 
 asn_dir(Dir, Base, Version, Enc) ->
 	[Dir | ["/../asn/" |[Base | [$. |[remove(Version,$.) | [$. |[atom_to_list(Enc)]]]]]]].
-
+%%
+%% basename of filename, similar to filename:basename,
+%% but remove ALL extension
+%%
 basename(Data) ->
 	basename(lists:reverse(Data), []).
 basename([], Res) ->
@@ -546,6 +560,10 @@ basename([H|_], Res) when H == $/ ->
 basename([H|T], Res) ->
 	basename(T, [H|Res]).
 	
+%%
+%% extension of filename, similar to filename:extension,
+%% but get all extensions, not just the last
+%%
 extension(Data) ->
 	extension(lists:reverse(Data), [], []).
 extension([], Res, Ext) ->
@@ -557,6 +575,9 @@ extension([H|_], _Res, Ext) when H == $/ ->
 extension([H|T], Res, Ext) ->
 	extension(T, [H|Res], Ext).
 	
+%%
+%% Remove char from string
+%%
 remove(Data, Token) ->
 	remove(Data, Token, []).
 remove([], _, Res) ->
@@ -566,10 +587,9 @@ remove([H|T],Token, Res) when H == Token ->
 remove([H|T], Token, Res) ->
 	remove(T, Token, [H|Res]).
 
-remove_eol(Data) -> no_eol(lists:reverse(Data)).
-no_eol([10|T]) -> lists:reverse(T);
-no_eol(Data) ->		lists:reverse(Data).
-
+%%
+%% Replace filename with an ets table reference
+%%
 get_db_ref([H|T], Src, DB) ->
 	{ok, F} = ets:file2tab(filename:join([Src,H])),
 	get_db_ref(T, Src, [F|DB]);
@@ -577,6 +597,9 @@ get_db_ref([], _, DB) ->
 	io:fwrite("  DB references: ~p~n",[DB]),
 	DB.
 
+%%
+%% Copy multiple files in list
+%%
 copy_files([], _, _) ->
 	ok;
 copy_files([H|T], Src, Dest) ->
