@@ -1,4 +1,4 @@
-<?xml version="1.0" ?>
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
 <resource>
   <object class="wxMenuBar" name="menu">
     <object class="wxMenu" name="file">
@@ -37,12 +37,16 @@
         <accel>Ctrl+C</accel>
       </object>
       <object class="separator"/>
-      <object class="wxMenuItem" name="options">
+      <object class="wxMenuItem" name="wxID_FIND">
+        <label>Find...</label>
+        <accel>Ctrl + F</accel>
+      </object>
+      <object class="separator"/>
+      <object class="wxMenuItem" name="help">
         <label>Preferences</label>
       </object>
     </object>
     <object class="wxMenu" name="help">
-      <label>Help</label>
       <object class="wxMenuItem" name="wxID_ABOUT">
         <label>About</label>
       </object>
@@ -50,6 +54,7 @@
         <label>Help</label>
         <accel>F1</accel>
       </object>
+      <label>Help</label>
     </object>
   </object>
 </resource>

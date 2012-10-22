@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<resource class="">
+  <object class="wxDialog">
+    <object class="wxFlexGridSizer">
+      <cols>1</cols>
+      <rows>2</rows>
+      <object class="sizeritem">
+        <object class="wxFlexGridSizer">
+          <object class="sizeritem">
+            <object class="wxStaticText">
+              <label>Find :</label>
+            </object>
+            <option>1</option>
+            <flag>wxALL|wxEXPAND|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+            <border>5</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxComboBox">
+              <size>273,-1</size>
+            </object>
+            <option>1</option>
+            <flag>wxALL|wxEXPAND</flag>
+            <border>5</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxCheckBox" name="find_word">
+              <label>Match word</label>
+            </object>
+            <option>1</option>
+            <flag>wxALL|wxEXPAND</flag>
+            <border>5</border>
+          </object>
+          <object class="spacer"/>
+          <object class="sizeritem">
+            <object class="wxCheckBox" name="find_case">
+              <label>Match Case</label>
+            </object>
+            <option>1</option>
+            <flag>wxALL|wxEXPAND</flag>
+            <border>5</border>
+          </object>
+          <object class="spacer"/>
+          <object class="sizeritem">
+            <object class="wxCheckBox" name="find_wrap">
+              <label>Wrap around</label>
+            </object>
+            <option>1</option>
+            <flag>wxALL|wxEXPAND</flag>
+            <border>5</border>
+          </object>
+          <object class="spacer"/>
+          <object class="sizeritem">
+            <object class="wxRadioBox" name="find_dir">
+              <label>Direction</label>
+              <content>
+                <item>Up</item>
+                <item>Down</item>
+              </content>
+              <style>wxRA_SPECIFY_COLS</style>
+            </object>
+            <option>1</option>
+            <flag>wxALL|wxEXPAND</flag>
+            <border>5</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxRadioBox" name="find_mode">
+              <label>Search Mode</label>
+              <content>
+                <item>Normal</item>
+                <item>Extended (\n, \t, \r, ...)</item>
+                <item>Regular Expression</item>
+              </content>
+              <style>wxRA_SPECIFY_COLS</style>
+            </object>
+            <option>1</option>
+            <flag>wxALL</flag>
+            <border>5</border>
+          </object>
+          <cols>2</cols>
+          <rows>5</rows>
+        </object>
+        <option>1</option>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>5</border>
+        <ratio>2</ratio>
+      </object>
+      <object class="sizeritem">
+        <object class="wxStdDialogButtonSizer">
+          <object class="button">
+            <object class="wxButton" name="wxID_OK">
+              <label>Find</label>
+              <default>1</default>
+            </object>
+          </object>
+          <object class="button">
+            <object class="wxButton" name="wxID_CANCEL"/>
+          </object>
+        </object>
+        <option>1</option>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>5</border>
+        <ratio>1</ratio>
+      </object>
+    </object>
+  </object>
+</resource>

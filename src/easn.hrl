@@ -21,7 +21,7 @@
 				parse,			% Reference to module which can parse ASN.1
 				file, 			% Last used file
 				asn,			% Last used ASN.1 specification
-				len}).			% Size of parsed file
+				load=false}).	% Indicates loading of data
 
 %% Record for window references
 -record(win, {frame,			% Frame reference
