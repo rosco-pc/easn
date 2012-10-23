@@ -17,20 +17,21 @@
 %% %CopyrightEnd%
 
 %% Record to handle application state
--record(state, {wx,				% Frame reference
-				parse,			% Reference to module which can parse ASN.1
-				file, 			% Last used file
-				asn,			% Last used ASN.1 specification
-				load=false}).	% Indicates loading of data
+-record(state, {wx,				        % Frame reference
+                parse,			      % Reference to module which can parse ASN.1
+                file, 			      % Last used file
+                asn,			        % Last used ASN.1 specification
+                load=false}).	    % Indicates loading of data
 
 %% Record for window references
--record(win, {frame,			% Frame reference
-			  asn,				% ASN.1 view wxTxtCtrl reference
-			  xml,				% XML view wxTxtCtrl reference
-			  hex,				% Hex view wxTxtCtrl reference
-			  info,				% Information view wxTxtCtrl reference
-			  comp,				% Components wxTreeCtrl reference
-			  choice}).			% ASN.1 wxComboBox reference
+-record(win, {frame,			        % Frame reference
+              asn,				        % ASN.1 view wxStyledTextCtrl reference
+              xml,				        % XML view wxStyledTextCtrl reference
+              hex,				        % Hex view wxTextCtrl reference
+              info,				        % Information view wxTextCtrl reference
+              comp,				        % Components wxTreeCtrl reference
+              nb,                 % Notebook reference
+              choice}).			      % ASN.1 wxComboBox reference
 				 
 %% Offsets into different text fileds
 -record(offset, {count,			% 
