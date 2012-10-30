@@ -1,19 +1,14 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<?xml version="1.0" encoding="UTF-8"?>
 <resource>
   <object class="wxMenuBar" name="menu">
     <object class="wxMenu" name="file">
       <label>File</label>
-      <object class="wxMenuItem" name="wxID_OPEN">
-        <label>Open...</label>
-        <accel>Ctrl+O</accel>
-      </object>
-      <object class="wxMenuItem" name="wxID_SAVE">
-        <label>Save</label>
-        <accel>Ctrl+S</accel>
-      </object>
-      <object class="wxMenuItem" name="wxID_SAVEAS">
-        <label>Save As...</label>
-        <accel>Ctrl+Shift+S</accel>
+      <object class="wxMenuItem" name="wxID_OPEN"/>
+      <object class="wxMenuItem" name="wxID_SAVE"/>
+      <object class="wxMenuItem" name="wxID_SAVEAS"/>
+      <object class="wxMenuItem" name="savePart">
+        <label>Save Selection</label>
+        <help>Save selected part</help>
       </object>
       <object class="separator"/>
       <object class="wxMenuItem" name="importASN">
@@ -25,35 +20,30 @@
         <label>Recent files</label>
       </object>
       <object class="separator"/>
-      <object class="wxMenuItem" name="wxID_EXIT">
-        <label>Exit</label>
-        <accel>Alt+X</accel>
-      </object>
+      <object class="wxMenuItem" name="wxID_EXIT"/>
     </object>
     <object class="wxMenu" name="edit">
       <label>Edit</label>
-      <object class="wxMenuItem" name="wxID_COPY">
-        <label>Copy</label>
-        <accel>Ctrl+C</accel>
-      </object>
+      <object class="wxMenuItem" name="wxID_COPY"/>
       <object class="separator"/>
-      <object class="wxMenuItem" name="wxID_FIND">
-        <label>Find...</label>
-        <accel>Ctrl + F</accel>
+      <object class="wxMenuItem" name="wxID_FIND"/>
+      <object class="wxMenuItem" name="findNext">
+        <label>Find Next</label>
+        <accel>F3</accel>
+        <enabled>0</enabled>
       </object>
+      <object class="wxMenuItem" name="findPrev">
+        <label>Find Previous</label>
+        <accel>Shift+F3</accel>
+        <enabled>0</enabled>
+      </object>
+    
       <object class="separator"/>
-      <object class="wxMenuItem" name="help">
-        <label>Preferences</label>
-      </object>
+      <object class="wxMenuItem" name="wxID_PREFERENCES"/>
     </object>
     <object class="wxMenu" name="help">
-      <object class="wxMenuItem" name="wxID_ABOUT">
-        <label>About</label>
-      </object>
-      <object class="wxMenuItem" name="wxID_HELP">
-        <label>Help</label>
-        <accel>F1</accel>
-      </object>
+      <object class="wxMenuItem" name="wxID_ABOUT"/>
+      <object class="wxMenuItem" name="wxID_HELP"/>
       <label>Help</label>
     </object>
   </object>

@@ -1,28 +1,87 @@
-easn
-====
+# REQUIREMENTS
+ Erlang (http://www.erlang.org) needs to be installed on your system
 
-ASN.1 Viewer &amp; Editor
+# BUILD INSTRUCTION
 
+## UNIX
+> make;
+> sudo make install 
 
-Usage
-=====
+## WINDOWS
+> install.bat
 
-Install Erlang on your system. Download from http://www.erlang.org/download.html 
-if you can not install it from your package manager or you're on Windows 
-(and in that case make sure to download the corect version, a 32 bit erlang 
-version under a 64bit windows system will not be detected by the easn.cmd file).
+# DECODING A FILE
 
-There is no make file yet, but you only need to compile 2 files easn.erl and 
-easn-gui.erl and copy the src/rc directory to the bin folder
+ * Select the ASN.1 specification you expect the file to be encoded with
+ * Select a file to encode
+ 
+The tool will show 4 view of the decoded file
+ 1 Tree list showing all parts in the decoded file
+ 2 A textual representation of the decoded file closely following the ASN.1
+   specification
+ 3 An XML view of the decoded data
+ 4 An Hex view of the raw data.
+ 
+Any messages will be shown in the info text field.
 
-Caveats
-=======
-This is the very first release of my ASN.1 viewer/editor. Not much is working yet
+Changes can be made in the tree list and when save will be reflected in the 
+other views. The tool will only check if any changes are valid ASN.1 and you 
+will have to make sure that the changes are correctly formed, e.g. in the case
+of an AddressString, the tool can only check that it is a string of Octets,
+the actual meaning of the octets is not know to the tool. 
+ 
+# COMPILING ASN.1 SPECIFICATION
 
-- Gui is working, but not everything is connected yet.   
-- Code for asn.1 pretty print is working (some minor issues with indenting 
-  still. Need to check print_type as the name of the is wrong),
-- Code for xml pretty print works.
-- Hexview works, but selection is not yet working; need to implement multiple 
-  selection, know how to do this, just not done yet.
-- Editing is not yet working  
+ * Select ASN.1 specification. If your specification is broken up in several 
+   parts, you need to provide a "set" file listing all parts. This is typically 
+   the case when the ASN.1 specification contains IMPORT statements
+ * Provide a title used in the dropdown list
+ * Provide a version (in order to distinguish multiple version of the spec)
+ * Indicate teh encoding rules used. If you don't know use 'ber'.
+
+If you get this error:
+```
+Compiling asn.1 specification: filename
+got 'EXPLICIT' expected one of: 'typereference . typereference', typereference, 
+    'TYPE-IDENTIFIER' or 'ABSTRACT-SYNTAX'
+```
+
+This is caused by a wrong use of the EXPLICIT statement. To solve this make 
+sure to remove EXPLICIT in the tag assignment and add the EXPLICIT where-ever 
+the tag is referenced.
+
+## EXAMPLE
+ 
+Look for a tag that is tagged EXPLICIT like this
+
+``` 
+ GSNAddress ::= EXPLICIT IPBinaryAddress
+
+ :
+ 
+ ServingElement ::= CHOICE {
+	originInfo                 [0] OriginInfo,
+	mSCAddress                 [1] AddressString,
+	ggsnAddress                [2] GSNAddress,
+	sgsnAddress                [3] GSNAddress,
+	...
+}
+```
+
+Remove the EXPLICIT keyword  and add it in front of tag  when referenced
+
+```
+ GSNAddress ::= IPBinaryAddress
+
+ :
+ 
+ ServingElement ::= CHOICE {
+	originInfo                 [0] OriginInfo,
+	mSCAddress                 [1] AddressString,
+	ggsnAddress                [2] EXPLICIT GSNAddress,
+	sgsnAddress                [3] EXPLICIT GSNAddress,
+	...
+}
+```
+
+and it will work.

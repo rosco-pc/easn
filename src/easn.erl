@@ -53,22 +53,23 @@ view([FN, ASN_spec, Version, Enc, Type]) ->
 start() ->
   Wx = wx:new(),                                              %% Starts wxwidgets
   Xrc = wxXmlResource:get(),                                  %% use XRC to define appplication layout
-  wxXmlResource:initAllHandlers(Xrc),                          %% Initialize ALL handlers (quick and dirty)
-  true = wxXmlResource:load(Xrc, rc_dir("main.xrc")),          %% Load main window
+  wxXmlResource:initAllHandlers(Xrc),                         %% Initialize ALL handlers (quick and dirty)
+  true = wxXmlResource:load(Xrc, rc_dir("main.xrc")),         %% Load main window
   true = wxXmlResource:load(Xrc, rc_dir("asn_dlg.xrc")),      %% Load ASN.1 dialog
-  true = wxXmlResource:load(Xrc, rc_dir("menu.xrc")),          %% Load Menu bar
+  true = wxXmlResource:load(Xrc, rc_dir("search_dlg.xrc")),   %% Load search dialog
+  true = wxXmlResource:load(Xrc, rc_dir("menu.xrc")),         %% Load Menu bar
   Frame = wxFrame:new(),                                      %% Create new Window
   myframe(Wx,Frame),                                          %% Build-up window
 
   %% Get references for later use
-  Chooser = wxXmlResource:xrcctrl(Frame, "choose", wxComboBox),
   Out = wxXmlResource:xrcctrl(Frame, "out_info", wxTextCtrl),
   Asn = wxXmlResource:xrcctrl(Frame, "out_asn", wxStyledTextCtrl),
   Xml = wxXmlResource:xrcctrl(Frame, "out_xml", wxStyledTextCtrl),
   Hex = wxXmlResource:xrcctrl(Frame, "out_hex", wxTextCtrl),
   Comp = wxXmlResource:xrcctrl(Frame, "components", wxTreeCtrl),
   Book = wxXmlResource:xrcctrl(Frame, "notebook", wxNotebook),
-  Recent = wxXmlResource:xrcctrl(Frame, "recent", wxMenu),
+  Recent = wxXmlResource:xrcctrl(Frame, "wxID_FILE", wxMenu),
+  Chooser = wxXmlResource:xrcctrl(Frame, "choose", wxComboBox),
   W = #win{frame=Frame, asn=Asn, xml=Xml, info=Out,
            hex=Hex,comp=Comp,choice=Chooser, nb=Book},
 
@@ -78,23 +79,28 @@ start() ->
 
   %% Select last used ASN.1 spec
   Config = get_config(),
-  Index = case Config#config.files of
+  Files = Config#config.files,
+  Index = case Files of
       []        -> 0;
-      [{_F,A}|_] -> wxComboBox:findString(Chooser, A#asn.title)
+      [{_F,A}|_] -> 
+        %% Add recent file to menu
+        S = size(list_to_tuple(Files)),
+        io:format("Recent ~p~n",[Recent]),
+        % [add_recent(Recent, Frame, F, C) || {F, _} <- Files, C <- lists:seq(1,S)],
+        %% Get index for ASN spec
+        wxComboBox:findString(Chooser, A#asn.title)
       end,
   wxComboBox:setSelection(Chooser, Index),
   Asn1 = easn_parse:retrieveASN(wxComboBox:getClientData(Chooser, Index)),  %% Make sure that all files are in place
-                                        %% and get the correct DB references
-  %% Add recent file to menu
-  add_recent(Recent, Config#config.files),
-
-  wxFrame:show(Frame),                    %% Show frame
-  %Pid = spawn(easn_parse, start, [self()]),          %% Start the parser
-  %loop(#state{wx=W,parse=Pid,asn=Asn1}),            %% Handle GUI events
-  loop(#state{wx=W,asn=Asn1}),                %% Handle GUI events
+                                                                            %% and get the correct DB references
+ 
+  wxFrame:show(Frame),                                        %% Show frame
+  %Pid = spawn(easn_parse, start, [self()]),                  %% Start the parser
+  %loop(#state{wx=W,parse=Pid,asn=Asn1}),                     %% Handle GUI events
+  loop(#state{wx=W,asn=Asn1}),                                %% Handle GUI events
   io:format("Close wx~n",[]),
-    wx:destroy().                        %% Stop wx server.
-  %exit(Pid, kill).                      %% Stop parser
+    wx:destroy().                                             %% Stop wx server.
+  %exit(Pid, kill).                                            %% Stop parser
 
 rc_dir(File) ->
   SelfDir = filename:dirname(code:which(?MODULE)),
@@ -119,7 +125,7 @@ attachSTC(Xrc, Parent, Name) ->
                                       {style, ?wxTE_READONLY}]),
   wxStyledTextCtrl:styleSetFontAttr(Ref, ?wxSTC_STYLE_DEFAULT, 10, "Consolas",
                                     false, false, false,
-                                    [{encoding, ?wxFONTENCODING_UTF8}]),
+                                    [{encoding, ?wxFONTENCODING_DEFAULT}]),
   wxXmlResource:attachUnknownControl(Xrc, Name, Ref),
   Ref.
 
@@ -128,10 +134,10 @@ connect(Frame) ->
   ok = wxFrame:connect(Frame, close_window),
   %% Handle menu events, make sure that NAME in xrc = wxID_XXXXX
   Def = [?wxID_OPEN, ?wxID_SAVE, ?wxID_SAVEAS, ?wxID_COPY, ?wxID_FIND,
-         ?wxID_HELP, ?wxID_EXIT, ?wxID_ABOUT],
+         ?wxID_EXIT, ?wxID_ABOUT, ?wxID_HELP],
   [connect_menu(Id, Frame) || Id <- Def],
   %% Handle non-standard/own menus
-  Menus = [importASN, options],
+  Menus = [importASN, savePart, findNext, findPrev, options],
   [connect_xrcid(Str,Frame) || Str <- Menus],
   %% Handle combobox events
   put(wxXmlResource:getXRCID("choose"), asn_spec),
@@ -156,40 +162,32 @@ connect_xrcid(Name,Frame) ->
 %%
 %% Update Recently used files menu
 %%
-add_recent(_, []) -> ok;
-add_recent(Recent, Files) ->
-  %% Add last used files
-  Add = fun(C, Cnt) ->
-      wxMenu:append(Recent, wxMenuItem:new([
-            {id,  ?wxID_FILE+Cnt},
-            {text,  element(1,C)}])),
-      Cnt + 1
-      end,
-  lists:foldl(Add, 0, Files).
+add_recent(Recent, Frame, File, Cnt) ->
+  M = wxMenuItem:new([{id, ?wxID_FILE+Cnt}, {text, File}]),
+  wxMenu:append(Recent, M),
+  wxFrame:connect(Frame, command_menu_selected,[{id, ?wxID_FILE+Cnt}]).
 
 
 %% Main event loop
 loop(State) ->
-  %io:format("waiting for event~n"),
   receive
   %% Handle window acions
   #wx{id=Id, event=#wxCommand{}} ->
-    %io:format("  Got wxCommand: ~p (~s)~n",[Id, get(Id)]),
     loop(handle_cmd(get(Id), Id, State));
   %% Close Application
-  #wx{event=#wxClose{}} ->
+  #wx{obj=Obj, event=#wxClose{}} when Obj == State#state.wx#win.frame->
     io:format("Close Application~n",[]),
-    wxWindow:destroy(State#state.wx#win.frame),         %% Close window
+    wxWindow:destroy(State#state.wx#win.frame),               %% Close window
     ok;
-  #wx{id=Id, obj=Ref, event=#wxTree{item=Item, type=command_tree_sel_changed}=Ev} ->
-    %io:format("  Got wxTree: ~p (~s): ~B~n",[Id, get(Id), Item]),
+  #wx{obj=Obj, event=#wxClose{}} when Obj == State#state.find#search.dlg->
+    io:format("Close dialog ~p~n",[Obj]),
+    wxDialog:destroy(State#state.find#search.dlg),            %% Close search dialog
+    F = State#state.find,
+    loop(State#state{find=F#search{dlg=undefined}});
+  #wx{id=Id, obj=Ref, event=#wxTree{type=command_tree_sel_changed}=Ev} ->
     loop(handle_tree(get(Id), Ref, Ev, State));
-  % Ev = #wx{} ->
-    % io:format("  Got wxEvent: ~p ~n", [Ev]),
-    % loop(State);
-  {show, Count} ->
-    %io:format("  Show ~B~n",[Count]),
-    loop(show(State, Count));
+  {show, Count, Offset, Root} ->
+    loop(show(State, Count, Offset, Root));
   Ev ->
     io:format("  Got ~p~n", [Ev]),
     loop(State)
@@ -235,7 +233,7 @@ loop_asn(State={Dlg, File, Version, Title, Enc}) ->
 
 
 %% Handle commands
-
+%% Open File
 handle_cmd(_, ?wxID_OPEN, State) ->
   io:format("Select file: ",[]),
   Frame = State#state.wx#win.frame,
@@ -246,9 +244,17 @@ handle_cmd(_, ?wxID_OPEN, State) ->
     FN = wxFileDialog:getPath(FD),
     io:format("~s~n",[FN]),
     status(State#state.wx#win.info, io_lib:format("Parsing ~s~n",[FN])),
-    Res = easn_parse:parse(FN, State#state.asn#asn.spec),
+    easn_parse:parse(FN, State#state.asn#asn.spec),
     status(State#state.wx#win.info, io_lib:format("Loading data ...~n",[])),
-    show(State#state{file=FN});
+    %% Get ASN information, with DB filnames
+    Asn = State#state.asn,
+    Base = easn_parse:basename(Asn#asn.file),
+    Dir = filename:dirname(code:which(?MODULE)),
+    Src = easn_parse:asn_dir(Dir, Base, Asn#asn.version, Asn#asn.enc),
+    {ok, [Cfg|_]} = file:consult(filename:join([Src, Base++".cfg"])),
+    CF = filename:join([Dir, "..", ?MODULE_STRING++".cfg"]),
+    updateConfig(CF, FN, Cfg),                                %% Update Config file
+    show(State#state{file=FN});                               %% Show decoded data
   _ ->
     io:format("-~n"),
     State
@@ -256,6 +262,7 @@ handle_cmd(_, ?wxID_OPEN, State) ->
   wxFileDialog:destroy(FD),
   S1;
 
+%% Save selected page in notebook, with name = file.txt
 handle_cmd(_, ?wxID_SAVE, State) ->
   File = State#state.file,
   Dir = filename:dirname(File),
@@ -272,6 +279,7 @@ handle_cmd(_, ?wxID_SAVE, State) ->
   end,
   State;
 
+%% Save selected page in Notebook with user specified name
 handle_cmd(_, ?wxID_SAVEAS, State) ->
   Frame = State#state.wx#win.frame,
   FD = wxFileDialog:new(Frame, [{style, ?wxFD_SAVE bor ?wxFD_OVERWRITE_PROMPT}]),
@@ -289,6 +297,34 @@ handle_cmd(_, ?wxID_SAVEAS, State) ->
   wxDialog:destroy(FD),
   State;
 
+%% Save selected part in selected page, user can specify name
+handle_cmd(savePart, _, State) ->
+  File = State#state.file,
+  Dir = filename:dirname(File),
+  Base = easn_parse:basename(File),
+  Item = wxTreeCtrl:getSelection(State#state.wx#win.comp),
+  Data = wxTreeCtrl:getItemData(State#state.wx#win.comp, Item),
+  Count = Data#offset.count,
+  {Out, {Start, End}, FN} = case wxNotebook:getSelection(State#state.wx#win.nb) of
+                            1 ->  {State#state.wx#win.xml, Data#offset.xml,
+                                   io_lib:format("~s_Part-~B.xml",[Base, Count])}; %% Save XML
+                            _ ->  {State#state.wx#win.asn, Data#offset.asn,
+                                   io_lib:format("~s_Part-~B.txt",[Base, Count])}  %% Save ASN.1
+                            end,
+  %Line = wxStyledTextCtrl:getFirstVisibleLine(Out),
+  Text = wxStyledTextCtrl:getTextRange(Out, Start, End),
+  FD = wxFileDialog:new(State#state.wx#win.frame, 
+                        [{style, ?wxFD_SAVE bor ?wxFD_OVERWRITE_PROMPT},
+                         {defaultDir, Dir}, {defaultFile, FN}]),
+  case wxFileDialog:showModal(FD) of
+  ?wxID_OK ->
+    file:write_file(wxFileDialog:getPath(FD), Text);
+  _ ->
+    ignore
+  end,
+  wxDialog:destroy(FD),
+  State;
+  
 handle_cmd(_, ?wxID_EXIT, State) ->
   io:format("Exit application~n",[]),
   wxFrame:close(State#state.wx#win.frame),         %% Close window
@@ -313,42 +349,6 @@ handle_cmd(_, ?wxID_COPY, State) ->
   wxStyledTextCtrl:copy(Out),
   State;
 
-handle_cmd(_, ?wxID_FIND, State) ->
-  io:format("  Search text",[]),
-  % Frame = State#state.wx#win.frame,
-  % %% Create Dialog
-  % Dlg = wxDialog:new(),
-  % Xrc = wxXmlResource:get(),
-  % true = wxXmlResource:loadDialog(Xrc, Dlg, Frame, "search_dlg"),
-
-  % %% Get references
-  % Find = wxXmlResource:xrcctrl(Dlg, "find", wxComboBoxCtrl),
-  % Find_word = wxXmlResource:xrcctrl(Dlg, "find_word", wxCheckBoxCtrl),
-  % Find_case = wxXmlResource:xrcctrl(Dlg, "find_case", wxCheckBoxCtrl),
-  % Find_wrap = wxXmlResource:xrcctrl(Dlg, "find_wrap", wxCheckBoxCtrl),
-  % Find_mode = wxXmlResource:xrcctrl(Dlg, "find_mode", wxRadioBoxCtrl),
-  % Find_dir = wxXmlResource:xrcctrl(Dlg, "find_dir", wxRadioBoxCtrl),
-  % %% Connect actions
-  % wxDialog:connect(Dlg, close_window),
-  % wxComboBox:connect(Find, command_combobox_selected),
-  % wxDialog:connect(Dlg, command_button_clicked, [{id, ?wxID_OK}]),
-  % wxDialog:connect(Dlg, command_button_clicked, [{id, ?wxID_CANCEL}]),
-
-  % %% Show Dialog
-  % wxDialog:show(Dlg),
-
-  % %% Handle dialog loop
-  % case loop_find({Dlg, Find, Find_word, Find_case, Find_wrap, Find_mode, Find_dir}) of
-  % {ok, -1} ->   ok;
-  % {ok, Pos} ->
-  % %{ok, close} ->
-  % end,
-
-  % wxDialog:destroy(Dlg),
-  State;
-
-
-
 handle_cmd(importASN, _, State) ->
   Frame = State#state.wx#win.frame,
   %% Create Dialog
@@ -372,33 +372,82 @@ handle_cmd(importASN, _, State) ->
   wxDialog:show(Dlg),
 
   %% Handle dialog loop
-  case loop_asn({Dlg, File, Version, Title, Enc}) of
-  {ok, Asn} ->
-    Res = easn_parse:compile(Asn),
-    Msg = "ASN.1 specification successfuly compiled\n",
-    Out = State#state.wx#win.info,
-    wxTextCtrl:appendText(Out, Msg),
-    %% Add new ASN.1 spec to dropdown box and select it
-    T = Res#asn.title,
-    Chooser = State#state.wx#win.choice,
-    wxComboBox:setSelection(Chooser, wxComboBox:append(Chooser, T, Res));
-  {error, Reason} ->
-    io:format("~s dialog~n",[Reason]),
-    Res = State#state.asn
-  end,
+  Asn = case loop_asn({Dlg, File, Version, Title, Enc}) of
+        {ok, Asn_spec} ->
+          M1 = io_lib:format("Compiling ASN.1 specification ~s version ~s~n",
+                             [Asn_spec#asn.file, Asn_spec#asn.version]),
+          status(State#state.wx#win.info, M1),
+          case easn_parse:compile(Asn_spec) of
+          {error, Reason} ->
+            M2 = io_lib:format("Error while compiling ASN.1 specification:~n~p~n",
+                               [Reason]),
+            status(State#state.wx#win.info, M2),
+            State#state.asn;
+          Res ->
+            %% Add new ASN.1 spec to dropdown box and select it
+            T = Res#asn.title,
+            Chooser = State#state.wx#win.choice,
+            wxComboBox:setSelection(Chooser, wxComboBox:append(Chooser, T, Res)),
+            status(State#state.wx#win.info, "ASN.1 specification successfuly compiled\n"),
+            State#state{asn=Res}
+          end;
+        {error, Reason} ->
+          io:format("~s dialog~n",[Reason]),
+          State#state.asn
+        end,
 
   %% Delete the dialog
   wxDialog:destroy(Dlg),
-  State#state{asn=Res};
-
-handle_cmd(asn_spec, _, State) ->
-  %% Handle wxComboBox selection change
-  Item = wxComboBox:getSelection(State#state.wx#win.choice),
-  Asn = easn_parse:retrieveASN(wxComboBox:getClientData(State#state.wx#win.choice, Item)),
   State#state{asn=Asn};
 
+%% Handle wxComboBox selection change
+handle_cmd(asn_spec, _, State) when State#state.file /= undefined ->
+  S1 = getASN(State),
+  easn_parse:parse(State#state.file, State#state.asn#asn.spec),
+  show(S1);
+handle_cmd(asn_spec, _, State) ->
+  getASN(State);
+
+%%
+%% Handle search dialog commands
+%%
+handle_cmd(_, ?wxID_FIND, State) ->
+  Frame = State#state.wx#win.frame,
+  %% Create Dialog
+  Dlg = wxDialog:new(),
+  Xrc = wxXmlResource:get(),
+  true = wxXmlResource:loadDialog(Xrc, Dlg, Frame, "search_dlg"),
+
+  %% Connect buttons
+  wxDialog:connect(Dlg, close_window),
+  wxDialog:connect(Dlg, command_button_clicked, [{id, ?wxID_OK}]),
+  ID = wxXmlResource:getXRCID(atom_to_list(findAll)),
+  put(ID, findAll),
+  wxDialog:connect(Dlg, command_button_clicked, [{id, ID}]),
+  wxDialog:connect(Dlg, command_button_clicked, [{id, ?wxID_CANCEL}]),
+
+  %% Show Dialog
+  wxDialog:show(Dlg),
+  State#state{find=#search{dlg=Dlg}};
+
+handle_cmd(_, ?wxID_OK, State) ->                             %% Find part containing text
+  io:format("  Find text: ",[]),
+  F = findText(false, State),
+  State#state{find=F};
+handle_cmd(findAll, _, State) ->                              %% Find all parts containing text
+  io:format("  Find All text: ",[]),
+  F = findText(true, State),
+  State#state{find=F};
+handle_cmd(_, ?wxID_CANCEL, State) ->                         %% Close dialog, do nothing
+  wxDialog:close(State#state.find#search.dlg),
+  State;
+  
+%% Handle unknown commands 
 handle_cmd(Dialog, Id, State) ->
   io:format("  Not implemented yet ~p (~p) ~n",[Dialog, Id]),
+  Dlg = wxMessageDialog:new(State#state.wx#win.frame, "Not implemented yet"),
+  wxDialog:showModal(Dlg),
+  wxDialog:destroy(Dlg),
   State.
 
 %handle_tree(comp, _, State) when State#state.load == true ->
@@ -417,6 +466,41 @@ handle_tree(Id, Ref, Ev, State) ->
   io:format("  Not implemented yet Id : ~p~n  Ev : ~p~n  Ref: ~p~n",[Id, Ev, Ref]),
   State.
 
+getASN(State) ->
+  [ets:delete(T) || T <- State#state.asn#asn.spec#asn_spec.db], %% Delete existing tabs
+  Item = wxComboBox:getSelection(State#state.wx#win.choice),    %% get new ASN.1 specification
+  Data = wxComboBox:getClientData(State#state.wx#win.choice, Item),
+  Asn = easn_parse:retrieveASN(Data),                           %% retrieve the ASN spec
+  State#state{asn=Asn}.
+
+findText(All, State) ->
+  Dlg = State#state.find#search.dlg,
+  T = wxXmlResource:xrcctrl(Dlg, "findText", wxTextCtrl),
+  Text = wxTextCtrl:getValue(T),
+  F1 = getCheck(Dlg, ["findCase", "findWord", "findWrap"], 
+                [?wxSTC_FIND_MATCHCASE, ?wxSTC_FIND_WHOLEWORD, 8], 0),
+  F2 = getRadio(Dlg, ["findMode", "findDir"],
+                [{0, 16, ?wxSTC_FIND_REGEXP}, {0,1}], F1),
+  io:format("~s~n  Flags : ~B~n",[Text, F2]),
+  State#state.find#search{find=Text, flags=F2}.
+  
+getCheck(Dlg, [CH|CT], [FH|FT], Flags) ->
+  CB = wxXmlResource:xrcctrl(Dlg, CH, wxCheckBox),
+  F = Flags bor case wxCheckBox:getValue(CB) of
+                true -> FH;
+                false -> 0
+                end,
+  getCheck(Dlg, CT, FT, F);
+getCheck(_, [], _, Flags) ->
+  Flags.
+
+getRadio(Dlg, [RH|RT], [FH|FT], Flags) ->
+  RB = wxXmlResource:xrcctrl(Dlg, RH, wxRadioBox),
+  F = Flags bor element(wxRadioBox:getSelection(RB)+1, FH),
+  getRadio(Dlg, RT, FT, F);
+getRadio(_, [], _, Flags) ->
+  Flags.
+  
 scan_asn() ->
   Dir = filename:dirname(code:which(?MODULE)),                  %% Directory
   Src = filename:join([Dir, "../asn"]),                         %% ASN.1 Directory
@@ -450,7 +534,6 @@ get_config() ->
 
 show(State) ->
   [{_,{Size, Data}}] = ets:lookup(decoded, 0),
-  <<P:32768/binary, _T/binary>> = Data,
   %% Clear text fields
   wxStyledTextCtrl:clearAll(State#state.wx#win.asn),
   wxStyledTextCtrl:clearAll(State#state.wx#win.xml),
@@ -460,22 +543,28 @@ show(State) ->
   %% Add filename as root
   %io:format("~n~s~n",[filename:basename(State#state.file)]),
   Root = wxTreeCtrl:addRoot(State#state.wx#win.comp,
-                filename:basename(State#state.file), []),
-  wxTextCtrl:appendText(State#state.wx#win.hex,
-              easn_parse:to_hex(P, 0, [])),
-  self() ! {show, 1},
-  State#state{load=true}.
-show(State, Count) ->
+                            filename:basename(State#state.file), []),
+  showHex(Data, Size, 0, State),                              %% Show Hex data
+  self() ! {show, 1, 32768, Root},
+  State.
+show(State, Count, Hex, Root) ->
   case ets:lookup(decoded, Count) of
-  [] ->                                                         %% Last record
+  [] ->                                                       %% Last record
     Msg = io_lib:format("Decoded ~B parts~n",[Count-1]),
     status(State#state.wx#win.info, Msg),
-    State#state{load=false};
-  [{_, {error, Reason}}] ->                                      %% Error
-    Msg = io_lib:format("Decoded ~B parts~nError: ~s~n",[Count-1,Reason]),
+    State;
+  [{_, {error, Reason}}] ->                                   %% Error
+    Msg = io_lib:format("Decoded ~B parts~nError: ~p~n",[Count-1,Reason]),
     status(State#state.wx#win.info, Msg),
-    State#state{load=false};
-  [{_, Offset, Rec}] ->                                          %% Decoded information
+    State;
+  [{_, Offset, Rec}] ->                                       %% Decoded information
+    Hex1 = if element(1, Offset#offset.hex) >= Hex ->         %% Display more Hex data?
+             [{_,{Size, Data}}] = ets:lookup(decoded, 0),
+             showHex(Data, Size, Hex, State),
+             Hex + 32768;
+           true ->
+             Hex
+           end,
     Spec = State#state.asn#asn.spec,
     %% ASN.1 output
     T1 = easn_parse:to_asn(Spec#asn_spec.root, Rec, 0, Spec#asn_spec.db),
@@ -485,19 +574,21 @@ show(State, Count) ->
     T2 = easn_parse:to_xml(Spec#asn_spec.root, Rec, 0, Spec#asn_spec.db),
     M2 = io_lib:format("<!-- Part ~B -->~n~n~s~n", [Count, T2]),
     Off_xml = insert(State#state.wx#win.xml, M2),
+    %% Add item to tree list
     Name = io_lib:format("Part ~B (~s)",[Count, atom_to_list(element(1, element(2, Rec)))]),
-    Root = wxTreeCtrl:getRootItem(State#state.wx#win.comp),
+    %Root = wxTreeCtrl:getRootItem(State#state.wx#win.comp),
     Item = wxTreeCtrl:appendItem(State#state.wx#win.comp, Root, Name,
                                  [{data, #offset{count=Count,
                                                  hex=Offset,
                                                  asn=Off_asn,
                                                  xml=Off_xml}}]),
+    
     case Count of
     1 -> wxTreeCtrl:selectItem(State#state.wx#win.comp, Item);
     _ -> ignore
     end,
-    self() ! {show, Count + 1},
-    State#state{load=true}
+    self() ! {show, Count + 1, Hex1, Root},
+    State
   end.
 
 insert(Out, Msg) ->
@@ -514,5 +605,26 @@ showLine(Ctrl, Pos) ->
   V -> wxStyledTextCtrl:gotoLine(Ctrl, L+(L-V))
   end.
 
+showHex(Data, Size, Start, State) when Start < Size ->
+  O = Size - Start,
+  End = if
+        O > 32768 -> 32768;
+        true      -> O
+        end,
+  <<_H:Start/binary, P:End/binary, _T/binary>> = Data,
+  wxTextCtrl:appendText(State#state.wx#win.hex,
+                        easn_parse:to_hex(P, 0, []));
+
+showHex(_,_,_,_) ->
+  ok.
+  
 status(Out, Msg) ->
   wxTextCtrl:appendText(Out, Msg).
+
+updateConfig(FN, File, Asn) ->
+  {ok, [Config]} = file:consult(FN),
+  C = newConfig({File, Asn}, Config),
+  file:write_file(FN, io_lib:format("~p.~n",[C])).
+
+newConfig(File, Config) ->
+  Config#config{files=lists:sublist([File|Config#config.files],9)}.
