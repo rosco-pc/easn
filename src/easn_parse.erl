@@ -120,12 +120,13 @@ parse(FN, Asn_spec) ->
   catch
   error:_ -> ets:delete_all_objects(decoded)
   end,
+  io:format("test decoded: ~p~n", [ets:first(decoded)]),
   case filelib:is_regular(FN) of
-    true ->
+  true ->
     {ok, Bytes} = file:read_file(FN),            %% Read file
     ets:insert(decoded, {0,{size(Bytes), Bytes}}),      %% Store contents 
     parse_asn(Asn_spec, 1, Bytes, 0, size(Bytes));      %% Parse file
-    false ->
+  false ->
     {error, io_lib:format("~s does not exist",[FN])}    %% Error
   end.
 
@@ -195,24 +196,104 @@ get_root(DB, Key, Root, Tag) ->
 %% Offset - Offset into binary file
 %% Size   - Size of binary file
 %%
-parse_asn(_, Count, <<>>, _, _) -> {ok, Count};          %% Done with parsing
+parse_asn(_, Count, <<>>, _, _) -> {ok, Count};               %% Done with parsing
 parse_asn(Spec, Count, <<H,T/binary>>, Offset, Size) when H==0 -> %% Skip filler bytes
   parse_asn(Spec, Count, T, Offset+1, Size); 
-parse_asn(Spec, Count, Bytes, Start, Size) ->          %% Parse ASN.1 file
+parse_asn(Spec, Count, Bytes, Start, Size) ->                 %% Parse ASN.1 file
   Mod = Spec#asn_spec.mod,
   case Mod:decode(Spec#asn_spec.root, Bytes) of
-    {ok, Dec, T} ->                      %% Decoded data
+    {ok, Dec, T} ->                                           %% Decoded data
       End = Start + size(T),
       ets:insert(decoded, {Count, {Start, End} , Dec}),
-      parse_asn(Spec, Count + 1, T, End, Size);      %% Continue parsing
-    {ok, Dec} ->                      %% Last piece of decoded data
+      parse_asn(Spec, Count + 1, T, End, Size);               %% Continue parsing
+    {ok, Dec} ->                                              %% Last piece of decoded data
       ets:insert(decoded, {Count, {Start, Size} , Dec}),
       {ok, Count};
-    Other ->                        %% Error
+    Other ->                                                  %% Error
       io:format("Parse error ~p~n",[Other]),
       ets:insert(decoded, {Count, Other}),
-      Other                        %% Quite parsing
+      Other                                                   %% Quite parsing
   end.
+  
+%%-----------------------------------------------------------------------
+%% Decode asn1 coded binary into parse tree
+%% Handles indefinite length if re-assembly has already been
+%% done - should be relatively easy to allow for segmented though
+%% as we keep a count of unrequited indefinite length
+%% constructor tags.
+%%-----------------------------------------------------------------------
+asn1_decode(Bin) ->
+asn1_decode(Bin, 0).
+
+asn1_decode(<<>>, 0) ->
+  [];
+asn1_decode(<<0:8, T/binary>>, N) ->
+  asn1_decode(T, N);
+asn1_decode(Bin, N0) ->
+  {Class, Form, Tag, Rest, N} = get_tag(Bin, N0),
+  case tag_type(Class, Form, Tag) of
+  indefinite_end ->
+    asn1_decode(Rest, N);
+  tag ->
+    {Len, Rest1} = get_length(Rest),
+    {Data, Rest2} = get_content(Len, Rest1),
+    [{{tag, fmt_class(Class), Tag}, Data}|asn1_decode(Rest2, N)];
+  Constructor ->
+    case get_length(Rest) of
+    {indefinite, Rest1} ->
+      [{{Constructor, indef, Class, Tag}, asn1_decode(Rest1,N+1)}];
+    {Len, Rest1} ->
+      {Data, Rest2} = get_content(Len, Rest1),
+      [{{Constructor, Class, Tag}, asn1_decode(Data, 0)}|
+       asn1_decode(Rest2, N)]
+    end
+  end.
+
+
+%% Get tag data. 0:1, 0:15 gets around compiler
+%% bug as I haven't updated my PC yet..
+get_tag(<<0:16, Rest/binary>>, 0) ->
+  exit(unexpected_end_of_indefinite_length);
+get_tag(<<0:16, Rest/binary>>, N) ->
+  {indefinite_end, 0, 0, Rest, N-1};
+get_tag(<<Class:2, Form:1, Tag:5, Rest/binary>>, N) ->
+  {Tag1, Rest1} = get_tag_ext(Tag, Rest),
+  {Class, Form, Tag1, Rest1, N}.
+
+%% Handle extension parts of the tag field
+get_tag_ext(31, <<0:1, Tag:7, Rest/binary>>) ->
+  {Tag, Rest};
+get_tag_ext(31, <<1:1, Msb:7, _:1, Lsb:7, Rest/binary>>) ->
+  {Msb*128+Lsb, Rest};
+get_tag_ext(Tag, Rest) ->
+  {Tag, Rest}.
+
+% Do short and long definite length forms
+% And *now*... indefinite length!
+get_length(<<0:1, Len:7, Rest/binary>>) ->
+  {Len, Rest};
+get_length(<<1:1, 0:7, Rest/binary>>) ->
+  {indefinite, Rest};
+get_length(<<1:1, Len_len:7, Rest/binary>>) ->
+  <<Len:Len_len/unit:8, Rest1/binary>> = Rest,
+  {Len, Rest1}.
+
+% Get actual content of field
+get_content(Len, Rest) ->
+  <<Data:Len/binary, Rest1/binary>> = Rest,
+  {Data, Rest1}.
+
+% tag_type(Class, Form, Tag) -> tag|seq|set|constructor
+tag_type(indefinite_end, _, _) -> indefinite_end;
+tag_type(Class, 0, Tag) -> tag;
+tag_type(0, 1, 16) -> seq;
+tag_type(0, 1, 17) -> set;
+tag_type(Class, 1, Els) -> constructor.
+
+fmt_class(0) -> univ;
+fmt_class(1) -> app;
+fmt_class(2) -> context;
+fmt_class(3) -> priv. 
 
 %%
 %% Human readable printout
@@ -223,10 +304,10 @@ parse_asn(Spec, Count, Bytes, Start, Size) ->          %% Parse ASN.1 file
 %% Indent - indentation counter
 %% DB     - list of asn1db files
 to_asn(Root, Data, Indent, DB) ->
-  DefRec = getDefinition(DB, Root),              %% Get Root definition from DB
-  Name = DefRec#typedef.name,                  %% Name of element
-  Def = DefRec#typedef.typespec#type.def,            %% Type of element
-  %io:format("Name: ~p~nRecord: ~p~n",[Name, Data]).
+  DefRec = getDefinition(DB, Root),                           %% Get Root definition from DB
+  Name = DefRec#typedef.name,                                 %% Name of element
+  Def = DefRec#typedef.typespec#type.def,                     %% Type of element
+  % io:format("Name: ~p~nRecord: ~p~n",[Name, Data]),
   write_asn_elem(Name, Def, Data, Indent, DB).
   
 write_asn_elem(Name, Def, Data, Indent, DB) when is_tuple(Data) ->
@@ -258,8 +339,8 @@ write_asn_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SET' -> %% Ha
    [io_lib:format("~s}~n",[indent(Indent)])]]];
 write_asn_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='CHOICE' -> %% Handle CHOICE type
   %io:format("N: ~p~nD: ~p~nH: ~p~nT: ~p~n",[Name, Def,H,T]),
-  Type = getChoice(element(2, Def), H),  %% Get spec of actual element
-  D1 = Type#type.def,  %% Type of element
+  Type = getChoice(element(2, Def), H),                       %% Get spec of actual element
+  D1 = Type#type.def,                                         %% Type of element
   [Record] = T,
   Data = to_list(Record),
   N1 = [indent(Indent) | atom_to_list(Name)],
@@ -268,11 +349,11 @@ write_asn_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='CHOICE' -> %%
    [io_lib:format("~s}~n",[indent(Indent)])]]];
 write_asn_elem(_, Def, Data, Indent, DB) when element(1,Def)=='Externaltypereference' -> %% New definition
   DefRec = getDefinition(DB, Def#'Externaltypereference'.type),
-  N1 = DefRec#typedef.name,  %% Name of element
-  D1 = DefRec#typedef.typespec#type.def,  %% Type of element
+  N1 = DefRec#typedef.name,                                   %% Name of element
+  D1 = DefRec#typedef.typespec#type.def,                      %% Type of element
   %io_lib:format("Name: ~p~nRecord: ~p~n",[Name, Data]).
   write_asn_elem(N1, D1, Data, Indent, DB);
-write_asn_elem(Name, _, Data, Indent, _) ->            %% BIG HACK, need to check!!
+write_asn_elem(Name, _, Data, Indent, _) ->                   %% BIG HACK, need to check!!
   N1 = [indent(Indent) | atom_to_list(Name)],
   io_lib:format( "~50.49s ~p~n",[N1, Data]).
   
@@ -281,7 +362,7 @@ write_asn_comp(Data, Comp, Indent, DB) when is_tuple(Comp) ->
   write_asn_comp(Data, element(1, Comp), Indent, DB);
 write_asn_comp([DH|DT], [_|CT], Indent, DB) when DH==asn1_NOVALUE ->    %% Skip elements with no value
   write_asn_comp(DT, CT, Indent, DB);
-write_asn_comp([DH|DT], [CH|CT], Indent, DB) ->                %% Handle ComponentType
+write_asn_comp([DH|DT], [CH|CT], Indent, DB) ->               %% Handle ComponentType
   Def = CH#'ComponentType'.typespec#type.def,
   [write_asn_type(DH, CH, Def, Indent, DB) | [write_asn_comp(DT, CT, Indent, DB)]].
   
@@ -323,9 +404,9 @@ write_asn_type(Data, Comp, _, Indent, _)  ->
   io_lib:format( "~50.49s [~2.10.0B] ~p~n",[Name, Tag, Data]).
    
 to_xml(Root, Data, Indent, DB) -> 
-  DefRec = getDefinition(DB, Root),              %% Get Root definition from DB
-  Name = DefRec#typedef.name,                  %% Name of element
-  Def = DefRec#typedef.typespec#type.def,            %% Type of element
+  DefRec = getDefinition(DB, Root),                           %% Get Root definition from DB
+  Name = DefRec#typedef.name,                                 %% Name of element
+  Def = DefRec#typedef.typespec#type.def,                     %% Type of element
   %io:format("Name: ~p~nRecord: ~p~n",[Name, Data]).
   write_xml_elem(Name, Def, Data, Indent, DB).
 
@@ -355,8 +436,8 @@ write_xml_elem(Name, Def, [_|T], Indent, DB) when element(1,Def)=='SET' ->   %% 
    [io_lib:format("~s</~s>~n",[indent(Indent),Name])]]];
 write_xml_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='CHOICE' -> %% Handle CHOICE type
   %io:format("N: ~p~nD: ~p~nH: ~p~nT: ~p~n",[Name, Def,H,T]),
-  Type = getChoice(element(2, Def), H),            %% Get spec of actual element
-  D1 = Type#type.def,                      %% Type of element
+  Type = getChoice(element(2, Def), H),                       %% Get spec of actual element
+  D1 = Type#type.def,                                         %% Type of element
   [Record] = T,
   Data = to_list(Record),
   [io_lib:format("~s<~s>~n",[indent(Indent),Name])|
@@ -364,10 +445,10 @@ write_xml_elem(Name, Def, [H|T], Indent, DB) when element(1,Def)=='CHOICE' -> %%
    [io_lib:format("~s</~s>~n",[indent(Indent),Name])]]];
 write_xml_elem(_, Def, Data, Indent, DB) when element(1,Def)=='Externaltypereference' -> %% New definition
   DefRec = getDefinition(DB, Def#'Externaltypereference'.type),
-  N1 = DefRec#typedef.name,                  %% Name of element
-  D1 = DefRec#typedef.typespec#type.def,            %% Type of element
+  N1 = DefRec#typedef.name,                                   %% Name of element
+  D1 = DefRec#typedef.typespec#type.def,                      %% Type of element
   write_xml_elem(N1, D1, Data, Indent, DB);
-write_xml_elem(Name, _, Data, Indent, _) ->            %% BIG HACK, need to check!!
+write_xml_elem(Name, _, Data, Indent, _) ->                   %% BIG HACK, need to check!!
   io_lib:format( "~s<~s>~p</~s>~n",[indent(Indent), Name, Data, Name]).
   
 write_xml_comp([], _, _,_) -> [];

@@ -403,7 +403,10 @@ handle_cmd(importASN, _, State) ->
 %% Handle wxComboBox selection change
 handle_cmd(asn_spec, _, State) when State#state.file /= undefined ->
   S1 = getASN(State),
-  easn_parse:parse(State#state.file, State#state.asn#asn.spec),
+  Msg = io_lib:format("Parsing file: ~s~n",[State#state.file]),
+  status(S1#state.wx#win.info, Msg),
+  easn_parse:parse(S1#state.file, S1#state.asn#asn.spec),
+  status(S1#state.wx#win.info, "Loading parts...\n"),
   show(S1);
 handle_cmd(asn_spec, _, State) ->
   getASN(State);
@@ -471,6 +474,8 @@ getASN(State) ->
   Item = wxComboBox:getSelection(State#state.wx#win.choice),    %% get new ASN.1 specification
   Data = wxComboBox:getClientData(State#state.wx#win.choice, Item),
   Asn = easn_parse:retrieveASN(Data),                           %% retrieve the ASN spec
+  Msg = io_lib:format("Change ASN.1 specification to ~s~n",[Asn#asn.title]),
+  status(State#state.wx#win.info, Msg),
   State#state{asn=Asn}.
 
 findText(All, State) ->
