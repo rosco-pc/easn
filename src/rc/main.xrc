@@ -41,13 +41,16 @@
                 </object>
               </object>
               <object class="sizeritem">
+                <object class="wxTreeCtrl" name="components">
+                  <tooltip>Show all decoded components in a file</tooltip>
+                  <style>wxTR_MULTIPLE|wxTR_EXTENDED|wxTR_DEFAULT_STYLE</style>
+                  <XRCED>
+                    <events>EVT_TREE_ITEM_RIGHT_CLICK</events>
+                  </XRCED>
+                </object>
                 <option>1</option>
                 <flag>wxALL|wxEXPAND</flag>
                 <border>5</border>
-                <object class="wxTreeCtrl" name="components">
-                  <style>wxTR_DEFAULT_STYLE</style>
-                  <tooltip>Show all decoded components in a file</tooltip>
-                </object>
               </object>
             </object>
           </object>
@@ -110,10 +113,7 @@
                             </object>
                           </object>
                           <object class="notebookpage">
-                            <label>Hex</label>
-                            <selected>0</selected>
                             <object class="wxPanel" name="hex">
-                              <style>wxTAB_TRAVERSAL</style>
                               <object class="wxBoxSizer">
                                 <orient>wxVERTICAL</orient>
                                 <object class="sizeritem">
@@ -134,36 +134,37 @@
                                   <border>0</border>
                                 </object>
                               </object>
+                              <style>wxTAB_TRAVERSAL</style>
                             </object>
+                            <label>Hex</label>
                           </object>
                         </object>
                       </object>
                     </object>
                   </object>
                   <object class="wxPanel" name="m_panel9">
-                    <style>wxTAB_TRAVERSAL</style>
-                    <size>820,70</size>
                     <object class="wxBoxSizer">
                       <orient>wxVERTICAL</orient>
                       <object class="sizeritem">
-                        <option>1</option>
-                        <flag>wxALL|wxEXPAND</flag>
-                        <border>5</border>
                         <object class="wxTextCtrl" name="out_info">
-                          <style>wxTE_MULTILINE|wxTE_READONLY</style>
+                          <maxlength>0</maxlength>
                           <font>
                             <size>10</size>
-                            <family>modern</family>
                             <style>normal</style>
                             <weight>normal</weight>
                             <underlined>0</underlined>
+                            <family>modern</family>
                             <face>Consolas</face>
                           </font>
-                          <value/>
-                          <maxlength>0</maxlength>
+                          <style>wxTE_MULTILINE|wxTE_READONLY</style>
                         </object>
+                        <option>1</option>
+                        <flag>wxALL|wxEXPAND</flag>
+                        <border>5</border>
                       </object>
                     </object>
+                    <size>820,90</size>
+                    <style>wxTAB_TRAVERSAL</style>
                   </object>
                 </object>
               </object>

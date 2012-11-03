@@ -184,8 +184,8 @@ loop(State) ->
     wxDialog:destroy(State#state.find#search.dlg),            %% Close search dialog
     F = State#state.find,
     loop(State#state{find=F#search{dlg=undefined}});
-  #wx{id=Id, obj=Ref, event=#wxTree{type=command_tree_sel_changed}=Ev} ->
-    loop(handle_tree(get(Id), Ref, Ev, State));
+  %#wx{id=Id, obj=Ref, event=#wxTree{type=command_tree_sel_changed}=Ev} ->
+  %  loop(handle_tree(get(Id), Ref, Ev, State));
   {show, Count, Offset, Root} ->
     loop(show(State, Count, Offset, Root));
   Ev ->
@@ -372,33 +372,33 @@ handle_cmd(importASN, _, State) ->
   wxDialog:show(Dlg),
 
   %% Handle dialog loop
-  Asn = case loop_asn({Dlg, File, Version, Title, Enc}) of
-        {ok, Asn_spec} ->
-          M1 = io_lib:format("Compiling ASN.1 specification ~s version ~s~n",
-                             [Asn_spec#asn.file, Asn_spec#asn.version]),
-          status(State#state.wx#win.info, M1),
-          case easn_parse:compile(Asn_spec) of
-          {error, Reason} ->
-            M2 = io_lib:format("Error while compiling ASN.1 specification:~n~p~n",
-                               [Reason]),
-            status(State#state.wx#win.info, M2),
-            State#state.asn;
-          Res ->
-            %% Add new ASN.1 spec to dropdown box and select it
-            T = Res#asn.title,
-            Chooser = State#state.wx#win.choice,
-            wxComboBox:setSelection(Chooser, wxComboBox:append(Chooser, T, Res)),
-            status(State#state.wx#win.info, "ASN.1 specification successfuly compiled\n"),
-            State#state{asn=Res}
-          end;
-        {error, Reason} ->
-          io:format("~s dialog~n",[Reason]),
-          State#state.asn
-        end,
-
+  Res = loop_asn({Dlg, File, Version, Title, Enc}), 
   %% Delete the dialog
   wxDialog:destroy(Dlg),
-  State#state{asn=Asn};
+  %% Evaluate dialog loop 
+  case Res of
+  {ok, Asn_spec} ->
+    M1 = io_lib:format("Compiling ASN.1 specification ~s version ~s~n",
+                       [Asn_spec#asn.file, Asn_spec#asn.version]),
+    status(State#state.wx#win.info, M1),
+    case easn_parse:compile(Asn_spec) of
+    {error, Reason} ->
+      M2 = io_lib:format("Error while compiling ASN.1 specification:~n~p~n",
+                         [Reason]),
+      status(State#state.wx#win.info, M2),
+      State;
+    Asn ->
+      %% Add new ASN.1 spec to dropdown box and select it
+      T = Res#asn.title,
+      Chooser = State#state.wx#win.choice,
+      wxComboBox:setSelection(Chooser, wxComboBox:append(Chooser, T, Res)),
+      status(State#state.wx#win.info, "ASN.1 specification successfuly compiled\n"),
+      State#state{asn=Asn}
+    end;
+  {error, Reason} ->
+    io:format("~s dialog~n",[Reason]),
+    State
+  end;
 
 %% Handle wxComboBox selection change
 handle_cmd(asn_spec, _, State) when State#state.file /= undefined ->
@@ -462,6 +462,7 @@ handle_tree(comp, Ref, #wxTree{item=Item, itemOld=Old}, State) when Old /= 0 ->
            _ ->
              wxTreeCtrl:getItemData(Ref, Item)
            end,
+  io:format("  Show ~B: ~p~n",[Item, Offset]),
   showLine(State#state.wx#win.asn, element(1, Offset#offset.asn)),
   showLine(State#state.wx#win.xml, element(1, Offset#offset.xml)),
    State;
@@ -549,6 +550,7 @@ show(State) ->
   %io:format("~n~s~n",[filename:basename(State#state.file)]),
   Root = wxTreeCtrl:addRoot(State#state.wx#win.comp,
                             filename:basename(State#state.file), []),
+  wxTreeCtrl:expand(State#state.wx#win.comp, Root),           %% Seems to be needed!
   showHex(Data, Size, 0, State),                              %% Show Hex data
   self() ! {show, 1, 32768, Root},
   State.
@@ -562,8 +564,9 @@ show(State, Count, Hex, Root) ->
     Msg = io_lib:format("Decoded ~B parts~nError: ~p~n",[Count-1,Reason]),
     status(State#state.wx#win.info, Msg),
     State;
-  [{_, Offset, Rec}] ->                                       %% Decoded information
+  [{_, Offset, Tag, Rec}] ->                                  %% Decoded information
     Hex1 = if element(1, Offset#offset.hex) >= Hex ->         %% Display more Hex data?
+             io:format("Add more hex data",[]),
              [{_,{Size, Data}}] = ets:lookup(decoded, 0),
              showHex(Data, Size, Hex, State),
              Hex + 32768;
@@ -572,11 +575,11 @@ show(State, Count, Hex, Root) ->
            end,
     Spec = State#state.asn#asn.spec,
     %% ASN.1 output
-    T1 = easn_parse:to_asn(Spec#asn_spec.root, Rec, 0, Spec#asn_spec.db),
+    T1 = easn_parse:to_asn(Tag, Rec, 0, Spec#asn_spec.db),
     M1 = io_lib:format("-- Part ~B~n~n~s~n", [Count, T1]),
     Off_asn = insert(State#state.wx#win.asn, M1),
     %% XML output
-    T2 = easn_parse:to_xml(Spec#asn_spec.root, Rec, 0, Spec#asn_spec.db),
+    T2 = easn_parse:to_xml(Tag, Rec, 0, Spec#asn_spec.db),
     M2 = io_lib:format("<!-- Part ~B -->~n~n~s~n", [Count, T2]),
     Off_xml = insert(State#state.wx#win.xml, M2),
     %% Add item to tree list
@@ -587,7 +590,7 @@ show(State, Count, Hex, Root) ->
                                                  hex=Offset,
                                                  asn=Off_asn,
                                                  xml=Off_xml}}]),
-    
+    io:format("  Item: ~B  ~p~n",[Item, #offset{count=Count,hex=Offset,asn=Off_asn,xml=Off_xml}]),
     case Count of
     1 -> wxTreeCtrl:selectItem(State#state.wx#win.comp, Item);
     _ -> ignore
@@ -599,7 +602,7 @@ show(State, Count, Hex, Root) ->
 insert(Out, Msg) ->
   Start = wxStyledTextCtrl:getLength(Out),
   wxStyledTextCtrl:appendText(Out, Msg),
-  Stop =  wxStyledTextCtrl:getLength(Out),
+  Stop = wxStyledTextCtrl:getLength(Out),
   {Start, Stop}.
 
 showLine(Ctrl, Pos) ->

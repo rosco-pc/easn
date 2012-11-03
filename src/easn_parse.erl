@@ -118,16 +118,17 @@ loop(Pid) ->
 parse(FN, Asn_spec) ->
   try ets:new(decoded, [named_table])
   catch
-  error:_ -> ets:delete_all_objects(decoded)
+    error:_All -> ets:delete_all_objects(decoded)
   end,
-  io:format("test decoded: ~p~n", [ets:first(decoded)]),
   case filelib:is_regular(FN) of
   true ->
-    {ok, Bytes} = file:read_file(FN),            %% Read file
-    ets:insert(decoded, {0,{size(Bytes), Bytes}}),      %% Store contents 
-    parse_asn(Asn_spec, 1, Bytes, 0, size(Bytes));      %% Parse file
+    {ok, Bytes} = file:read_file(FN),                         %% Read file
+    ets:insert(decoded, {0,{size(Bytes), Bytes}}),            %% Store contents 
+    Mod = Asn_spec#asn_spec.mod,
+    Root = Asn_spec#asn_spec.root,
+    parse_asn({Mod, Root}, Bytes, 1, 0, size(Bytes));         %% Parse file
   false ->
-    {error, io_lib:format("~s does not exist",[FN])}    %% Error
+    {error, io_lib:format("~s does not exist",[FN])}          %% Error
   end.
 
 %%
@@ -152,9 +153,20 @@ compile(Asn) ->
       {ok, DB} = ets:file2tab(DBFile),                        %% Open DB
       Tag = get_root(DB),                                     %% Determine 'root' tag
       ets:delete(DB),                                         %% Close DB
-      DBs = get_db(ASN_spec),                                 %% get ALL asn1db files for this specification
-      io:format("  Root: ~s~n",[Tag]),
-      S = #asn_spec{db=DBs, mod=list_to_atom(Base), root=Tag},
+      %%-----------------
+      %% The following is no longer needed, keep the code for the moment though!!
+      %%-----------------
+      % %% make sure all needed .asn1db files are there 
+      % DBs = case extension(ASN_spec) of
+            % ".set.asn" ->
+              % Lines = get_lines(ASN_spec),                    %% Get specifications
+              % [_H | Rest] = Lines,                            %% Skip the first one
+              % [asn1ct:compile(F,[Enc, noobj]) || F <- Rest],  %% Compile to get .asn1db file
+              % [basename(F)++".asn1db" || F <- Lines];         %% Get list of .asndb files
+            % _ -> [basename(ASN_spec)++".asn1db"]
+            % end,
+      io:format("  Root: ~p~n",[Tag]),
+      S = #asn_spec{db=Base++".asn1db", mod=list_to_atom(Base), root=Tag},
       storeASN(Asn#asn{spec=S})
     catch 
       throw:Error -> Error
@@ -166,25 +178,42 @@ compile(Asn) ->
 %%
 %% DB - full path to asn1db file
 %%
-get_root(DB) ->                                               %% Determine root element, with lowest position
-  case ets:first(DB) of
-    '$end_of_table' -> '';                                    %% Empty table
-    Key ->
-    D = ets:lookup_element(DB, Key, 2),
-    get_root(DB, Key, Key, element(3,D))
+get_root(DB) ->       
+  Module = ets:lookup_element(DB, 'MODULE', 2),
+  Mod = Module#module.name,
+  Exports = element(2, Module#module.exports),
+  Root = try
+           [X#'Externaltypereference'.type || X <- Exports, is_list(Exports),
+                                     X#'Externaltypereference'.module == Mod]
+         catch
+           error:_-> []
+         end,
+  case Root of
+  [] ->
+      case ets:first(DB) of                                       %% Determine root element, with lowest position
+      '$end_of_table' -> '';                                      %% Empty table
+      Key ->
+        D = ets:lookup_element(DB, Key, 2),
+        get_root(DB, Key, Key, element(3,D))
+      end;
+  _ ->
+    Root
   end.
   
 get_root(DB, Key, Root, Tag) ->
   case ets:next(DB, Key) of
-    '$end_of_table' -> Root;
-    Next ->
+  '$end_of_table' -> [Root];
+  Next ->
+    
     D = ets:lookup_element(DB, Next, 2),
-    T = element(3, D),
-    if T < Tag -> 
-      get_root(DB, Next, Next, T);
-    true -> 
-      get_root(DB, Next, Root, Tag) 
-    end
+    Ntag = element(3, D),
+    {R, T} = case min(Tag, Ntag) of
+             Tag       -> {Root, Tag};
+             undefined -> {Root, Tag};
+             _         -> {Next, Ntag}
+             end,
+    %io:format("~s : ~p~n", [Next, D]),
+    get_root(DB, Next, R, T)
   end.
   
 %%
@@ -196,23 +225,25 @@ get_root(DB, Key, Root, Tag) ->
 %% Offset - Offset into binary file
 %% Size   - Size of binary file
 %%
-parse_asn(_, Count, <<>>, _, _) -> {ok, Count};               %% Done with parsing
-parse_asn(Spec, Count, <<H,T/binary>>, Offset, Size) when H==0 -> %% Skip filler bytes
-  parse_asn(Spec, Count, T, Offset+1, Size); 
-parse_asn(Spec, Count, Bytes, Start, Size) ->                 %% Parse ASN.1 file
-  Mod = Spec#asn_spec.mod,
-  case Mod:decode(Spec#asn_spec.root, Bytes) of
-    {ok, Dec, T} ->                                           %% Decoded data
-      End = Start + size(T),
-      ets:insert(decoded, {Count, {Start, End} , Dec}),
-      parse_asn(Spec, Count + 1, T, End, Size);               %% Continue parsing
+parse_asn(_, <<>>, Count, _, _) -> {ok, Count};               %% Done with parsing
+parse_asn(Spec, <<0:8,Rest/binary>>, Count, Offset, Size) ->  %% Skip filler bytes
+  parse_asn(Spec, Rest, Count, Offset+1, Size); 
+parse_asn({Mod, [H|T]=Root}, Bytes, Count, Start, Size) ->    %% Parse ASN.1 file
+  case Mod:decode(H, Bytes) of
+    {ok, Dec, Rest} ->                                        %% Decoded data
+      End = Start + size(Rest),
+      ets:insert(decoded, {Count, {Start, End}, H, Dec}),     %% Store decoded data
+      parse_asn({Mod, Root}, Rest, Count + 1, End, Size);     %% Continue parsing
     {ok, Dec} ->                                              %% Last piece of decoded data
-      ets:insert(decoded, {Count, {Start, Size} , Dec}),
+      ets:insert(decoded, {Count, {Start, Size}, H, Dec}),    %% Store decoded data
       {ok, Count};
-    Other ->                                                  %% Error
-      io:format("Parse error ~p~n",[Other]),
-      ets:insert(decoded, {Count, Other}),
-      Other                                                   %% Quite parsing
+    {error, Reason} when T /= [] ->                           %% Error
+      io:format("Parse error ~p~n",[Reason]),
+      parse_asn({Mod, T}, Bytes, Count, Start, Size);         %% Try other Tag
+    {error, Reason} ->                                        %% Error
+      io:format("Parse error ~p~n",[Reason]),
+      ets:insert(decoded, {Count, {error, Reason}}),
+      {error, Reason}                                         %% Quite parsing
   end.
   
 %%-----------------------------------------------------------------------
@@ -225,11 +256,12 @@ parse_asn(Spec, Count, Bytes, Start, Size) ->                 %% Parse ASN.1 fil
 asn1_decode(Bin) ->
 asn1_decode(Bin, 0).
 
-asn1_decode(<<>>, 0) ->
+asn1_decode(<<>>, 0) ->                                       %% Done
   [];
-asn1_decode(<<0:8, T/binary>>, N) ->
-  asn1_decode(T, N);
-asn1_decode(Bin, N0) ->
+%% Skip any filler bytes, typically used in CDR files
+asn1_decode(<<0:8, Rest/binary>>, N) ->
+  asn1_decode(Rest, N);
+asn1_decode(Bin, N0) ->                                       %% Decode tags                          
   {Class, Form, Tag, Rest, N} = get_tag(Bin, N0),
   case tag_type(Class, Form, Tag) of
   indefinite_end ->
@@ -250,9 +282,8 @@ asn1_decode(Bin, N0) ->
   end.
 
 
-%% Get tag data. 0:1, 0:15 gets around compiler
-%% bug as I haven't updated my PC yet..
-get_tag(<<0:16, Rest/binary>>, 0) ->
+%% Get tag data. 
+get_tag(<<0:16, _Rest/binary>>, 0) ->
   exit(unexpected_end_of_indefinite_length);
 get_tag(<<0:16, Rest/binary>>, N) ->
   {indefinite_end, 0, 0, Rest, N-1};
@@ -285,10 +316,10 @@ get_content(Len, Rest) ->
 
 % tag_type(Class, Form, Tag) -> tag|seq|set|constructor
 tag_type(indefinite_end, _, _) -> indefinite_end;
-tag_type(Class, 0, Tag) -> tag;
+tag_type(_Class, 0, _Tag) -> tag;
 tag_type(0, 1, 16) -> seq;
 tag_type(0, 1, 17) -> set;
-tag_type(Class, 1, Els) -> constructor.
+tag_type(_Class, 1, _Els) -> constructor.
 
 fmt_class(0) -> univ;
 fmt_class(1) -> app;
@@ -599,7 +630,7 @@ storeASN(Asn) ->
   file:make_dir(Dest),                                        %% Create directory
   A = Asn#asn.spec#asn_spec.db,                               %% .asn1db files
   B = Base++".beam",                                          %% .beam file
-  copy_files([B|A], Src, Dest),              
+  copy_files([A,B], Src, Dest),              
   %% Copy ASN.1 spcification
   New = filename:join([Dest, Base++".asn"]),
   file:copy(Asn#asn.file, New),
@@ -608,7 +639,7 @@ storeASN(Asn) ->
   C = filename:join([Dest, Base++".cfg"]),
   file:write_file(C, io_lib:format("~p.~n",[A1])),
   %% Replace DB filenames with ETS references
-  DB = get_db_ref(A, Src, []),
+  DB = get_db_ref([A], Src, []),
   A1#asn{spec=Asn#asn.spec#asn_spec{db=DB}}.
 
 %%
@@ -616,6 +647,7 @@ storeASN(Asn) ->
 %%
 retrieveASN(Asn) ->
   %% Extract specification filename without path & extension
+  io:format(" Retrieve ASN: ~p~n",[Asn]),
   Base = basename(Asn#asn.file),
   Dest = filename:dirname(code:which(?MODULE)),
   Src = asn_dir(Dest, Base, Asn#asn.version, Asn#asn.enc),
@@ -626,7 +658,7 @@ retrieveASN(Asn) ->
   io:format("~p~n",[filename:join([Src, Base++".cfg"])]),
   {ok, [Asn|_]} = file:consult(filename:join([Src, Base++".cfg"])),
   %% Replace DB filenames with ETS references
-  DB = get_db_ref(Asn#asn.spec#asn_spec.db, Src, []),
+  DB = get_db_ref([Asn#asn.spec#asn_spec.db], Src, []),
   Asn#asn{spec=Asn#asn.spec#asn_spec{db=DB}}.
 
 asn_dir(Dir, Base, Version, Enc) ->
@@ -691,24 +723,22 @@ get_db_ref([], _, DB) ->
 copy_files([], _, _) ->
   ok;
 copy_files([H|T], Src, Dest) ->
+  io:format("  Copy: ~s~n",[H]),
   file:copy(filename:join([Src, H]), filename:join([Dest, H])),
   copy_files(T, Src, Dest).
-  
-get_db(File) ->
-  case extension(File) of
-  ".set.asn" ->              %% Multiple ASN.1 specifications
-    {ok, Dev} = file:open(File, [read]),
-    get_lines(Dev);
-  _ -> 
-    [basename(File) ++ ".asn1db"]
-  end.
 
-get_lines(Dev) ->
+%%
+%% Read lines from file
+%%
+get_lines(FN) when is_list(FN) ->
+  {ok, Dev} = file:open(FN, [read]),
+  get_lines(Dev);
+get_lines(Dev) when is_pid(Dev) ->
     case io:get_line(Dev, "") of
     eof  -> 
     file:close(Dev), 
     [];
     Line -> 
-    [basename(Line)++".asn1db" | get_lines(Dev)]
+    [Line | get_lines(Dev)]
     end.  
                 

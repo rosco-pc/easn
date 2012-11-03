@@ -24,7 +24,7 @@ The tool consists of several elements:
  5. An Hex view of the raw data.
  6. Info text field
 
-![Application View](doc/images/app.png)
+![Application View](easn/doc/images/app.png)
 
 Any messages will be shown in the info text field (5)
 
@@ -37,7 +37,7 @@ the actual meaning of the octets is not know to the tool.
  
 # Importing ASN.1 Specification
 
-![Import ASN dialog](doc/images/import_asn.png)
+![Import ASN dialog](easn/doc/images/import_asn.png)
 
  * Select ASN.1 specification. If your specification is broken up in several 
    parts, you need to provide a "set" file listing all parts. This is typically 
