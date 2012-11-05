@@ -86,7 +86,17 @@
                               <object class="wxBoxSizer">
                                 <orient>wxVERTICAL</orient>
                                 <object class="sizeritem">
-                                  <object class="unknown" name="out_asn"/>
+                                  <object class="unknown" name="out_asn">
+                                    <font>
+                                      <size>10</size>
+                                      <style>normal</style>
+                                      <weight>normal</weight>
+                                      <underlined>0</underlined>
+                                      <family>default</family>
+                                      <face>DejaVu Sans Mono</face>
+                                      <encoding>UTF-8</encoding>
+                                    </font>
+                                  </object>
                                   <option>1</option>
                                   <flag>wxEXPAND | wxALL | wxADJUST_MINSIZE</flag>
                                   <border>0</border>

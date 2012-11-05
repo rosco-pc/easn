@@ -16,13 +16,11 @@
 %%
 %% %CopyrightEnd%
 %%-------------------------------------------------------------------
-%% File    : easn.erl
-%% Author  : Rob Schmersel <rob@schmersel.net>
-%% Description : Generic asn.1 viewer & editor
+%% File         : easn_parse.erl
+%% Author       : Rob Schmersel <rob@schmersel.net>
+%% Description  : Generic asn.1 viewer & editor
 %%
-%% Created :  18 Aug 2012 - Initial release
-
-%%  Still TODO: - Allow editing/re-encoding of decoded data
+%% Created      :  18 Aug 2012 - Initial release
 %%-------------------------------------------------------------------
 
 %% Purpose: General purpose ASN.1 Decoder
@@ -232,16 +230,16 @@ parse_asn({Mod, [H|T]=Root}, Bytes, Count, Start, Size) ->    %% Parse ASN.1 fil
   case Mod:decode(H, Bytes) of
     {ok, Dec, Rest} ->                                        %% Decoded data
       End = Start + size(Rest),
-      ets:insert(decoded, {Count, {Start, End}, H, Dec}),     %% Store decoded data
+      ets:insert(decoded, {Count, {Start, End}, H, Dec, 0}),     %% Store decoded data
       parse_asn({Mod, Root}, Rest, Count + 1, End, Size);     %% Continue parsing
     {ok, Dec} ->                                              %% Last piece of decoded data
-      ets:insert(decoded, {Count, {Start, Size}, H, Dec}),    %% Store decoded data
+      ets:insert(decoded, {Count, {Start, Size}, H, Dec, 0}),    %% Store decoded data
       {ok, Count};
     {error, Reason} when T /= [] ->                           %% Error
-      io:format("Parse error ~p~n",[Reason]),
+      io:format("Parse error: unknown root, try next ~p~n",[T]),
       parse_asn({Mod, T}, Bytes, Count, Start, Size);         %% Try other Tag
     {error, Reason} ->                                        %% Error
-      io:format("Parse error ~p~n",[Reason]),
+      io:format("Parse error: unknow root, show raw decode~p~n",[Reason]),
       ets:insert(decoded, {Count, {error, Reason}}),
       {error, Reason}                                         %% Quite parsing
   end.
@@ -253,31 +251,32 @@ parse_asn({Mod, [H|T]=Root}, Bytes, Count, Start, Size) ->    %% Parse ASN.1 fil
 %% as we keep a count of unrequited indefinite length
 %% constructor tags.
 %%-----------------------------------------------------------------------
-asn1_decode(Bin) ->
-asn1_decode(Bin, 0).
+raw_decode(Bin) ->
+raw_decode(Bin, 0).
 
-asn1_decode(<<>>, 0) ->                                       %% Done
+raw_decode(<<>>, 0) ->                                       %% Done
   [];
 %% Skip any filler bytes, typically used in CDR files
-asn1_decode(<<0:8, Rest/binary>>, N) ->
-  asn1_decode(Rest, N);
-asn1_decode(Bin, N0) ->                                       %% Decode tags                          
+raw_decode(<<0:8, Rest/binary>>, N) ->
+  raw_decode(Rest, N);
+raw_decode(Bin, N0) ->                                       %% Decode tags                          
   {Class, Form, Tag, Rest, N} = get_tag(Bin, N0),
   case tag_type(Class, Form, Tag) of
   indefinite_end ->
-    asn1_decode(Rest, N);
+    raw_decode(Rest, N);
   tag ->
     {Len, Rest1} = get_length(Rest),
     {Data, Rest2} = get_content(Len, Rest1),
-    [{{tag, fmt_class(Class), Tag}, Data}|asn1_decode(Rest2, N)];
+    [{{tag, fmt_class(Class), Tag}, Data}|raw_decode(Rest2, N)];
   Constructor ->
     case get_length(Rest) of
     {indefinite, Rest1} ->
-      [{{Constructor, indef, Class, Tag}, asn1_decode(Rest1,N+1)}];
+      [{{Constructor, indef, Class, Tag}, raw_decode(Rest1,N+1)}];
     {Len, Rest1} ->
       {Data, Rest2} = get_content(Len, Rest1),
-      [{{Constructor, Class, Tag}, asn1_decode(Data, 0)}|
-       asn1_decode(Rest2, N)]
+      [{{Constructor, Class, Tag}, raw_decode(Data, 0)}|
+       raw_decode(Rest2, N)]
+      %{ok, {{Constructor, Class, Tag}, raw_decode(Data, 0)}, Rest2}
     end
   end.
 
@@ -356,8 +355,8 @@ write_asn_elem(_, Def, Data, Indent, DB) when element(1,Def)=='SEQUENCE OF' -> %
   'Externaltypereference' ->
     N1 = D1#'Externaltypereference'.type,
     N2 = [indent(Indent) | atom_to_list(N1)],
-    [io_lib:format( "~50.49s SEQUENCE OF {~n",[N2]) |
-     [[to_asn(N1, X, Indent+1, DB) || X <- Data] |
+    [io_lib:format( "~50.48s SEQUENCE OF {~n",[N2]) |
+     [[to_asn(N1, X, Indent+2, DB) || X <- Data] |
      [io_lib:format( "~s}~n", [indent(Indent)])]]];
   _ ->
     io_lib:format("Def: ~p~n",[D1])
@@ -386,7 +385,7 @@ write_asn_elem(_, Def, Data, Indent, DB) when element(1,Def)=='Externaltyperefer
   write_asn_elem(N1, D1, Data, Indent, DB);
 write_asn_elem(Name, _, Data, Indent, _) ->                   %% BIG HACK, need to check!!
   N1 = [indent(Indent) | atom_to_list(Name)],
-  io_lib:format( "~50.49s ~p~n",[N1, Data]).
+  io_lib:format( "~50.48s ~p~n",[N1, Data]).
   
 write_asn_comp([], _, _,_) -> [];
 write_asn_comp(Data, Comp, Indent, DB) when is_tuple(Comp) ->
@@ -404,7 +403,7 @@ write_asn_type(Data, _, Def, Indent, DB) when is_tuple(Def),
   to_asn(Name, Data, Indent+1, DB);
 %   [write_asn_type(T, [], Def, Indent, DB)]];  
 write_asn_type(Data, Comp, Def, Indent, DB) when is_tuple(Def), 
-                     element(1, Def)=='SEQUENCE OF' ->
+                                                  element(1, Def)=='SEQUENCE OF' ->
   %io:format("Comp: ~p~n", [Comp]),
   Tag = get_tag(Comp#'ComponentType'.tags),
   %% Look-ahead for child definition
@@ -414,7 +413,7 @@ write_asn_type(Data, Comp, Def, Indent, DB) when is_tuple(Def),
   'Externaltypereference' ->
     N1 = D1#'Externaltypereference'.type,
     Name = [indent(Indent) | atom_to_list(Comp#'ComponentType'.name)],
-    [io_lib:format( "~50.49s [~2.10.0B] SEQUENCE OF {~n",[Name, Tag]) |
+    [io_lib:format( "~50.48s [~2.10.0B] SEQUENCE OF {~n",[Name, Tag]) |
      [[to_asn(N1, X, Indent+1, DB) || X <- Data] |
      [io_lib:format( "~s}~n", [indent(Indent)])]]];
   _ ->
@@ -424,15 +423,15 @@ write_asn_type(Data, Comp, Def, Indent, _) when Def == 'OCTET STRING' ->
   Tag = get_tag(Comp#'ComponentType'.tags),
   D1 = [io_lib:format("~2.16.0B", [X]) || X <- Data],
   Name = [indent(Indent) | atom_to_list(Comp#'ComponentType'.name)],
-  io_lib:format( "~50.49s [~2.10.0B] ~s~n",[Name, Tag, D1]);
+  io_lib:format( "~50.48s [~2.10.0B] ~s~n",[Name, Tag, D1]);
 write_asn_type(Data, Comp, _, Indent, _) when is_binary(Data) ->   
   Tag = get_tag(Comp#'ComponentType'.tags),
   Name = [indent(Indent) | atom_to_list(Comp#'ComponentType'.name)],
-  io_lib:format( "~50.49s [~2.10.0B] ~p~n",[Name, Tag, binary_to_list(Data)]);  
+  io_lib:format( "~50.48s [~2.10.0B] ~p~n",[Name, Tag, binary_to_list(Data)]);  
 write_asn_type(Data, Comp, _, Indent, _)  ->   
   Tag = get_tag(Comp#'ComponentType'.tags),
   Name = [indent(Indent) | atom_to_list(Comp#'ComponentType'.name)],
-  io_lib:format( "~50.49s [~2.10.0B] ~p~n",[Name, Tag, Data]).
+  io_lib:format( "~50.48s [~2.10.0B] ~p~n",[Name, Tag, Data]).
    
 to_xml(Root, Data, Indent, DB) -> 
   DefRec = getDefinition(DB, Root),                           %% Get Root definition from DB
@@ -554,30 +553,28 @@ hex_line(<<H:16/binary, T/binary>>, Offset) ->
 hex_line(<<>>, Offset) ->
   {ok, [], <<>>, Offset}.
 
+%% Return spaces for indenting
 indent(0) -> "";                        %% no indent
-indent(1) -> "";                        %% Compensate for formatting 
 indent(Cnt) -> string:copies(" ", Cnt-1).
 empty(0) -> "";
 empty(Cnt) -> string:copies("   ", Cnt).
 
+%% Convert binry to prinable (ascii) string
 to_ascii(<<H:8, T/binary>>, String) when H < 32;
-                     H > 126 ->
+                                         H > 126 ->
   to_ascii(T,["."|String]);                  %% Don't show control codes
 to_ascii(<<H:8, T/binary>>, String) ->
   to_ascii(T, [H|String]);                  %% Add character
 to_ascii(<<>>, String) ->
   lists:reverse(String).
 
-to_string(Int) when Int < 10 ->
-  "0" ++ integer_to_list(Int);
-to_string(Int) ->
-  integer_to_list(Int).
-
+%% Convert data to list
 to_list(D) when is_tuple(D) -> tuple_to_list(D);
 to_list(D) when is_binary(D) -> binary_to_list(D);
 to_list(D) when is_list(D) -> D;
 to_list(D) -> [D].
 
+%% Get data from multiplpe ets tables
 getDefinition([H|T], Comp) ->
   case ets:lookup(H, Comp) of
   [] ->     getDefinition(T, Comp);
@@ -586,15 +583,17 @@ getDefinition([H|T], Comp) ->
   end;
 getDefinition([], _) ->
   [].
-    
+   
+%% Get used CHOICE element
 getChoice(Def, Name) when is_tuple(Def) ->
   getChoice(element(1, Def), Name);
 getChoice([], _) -> [];
 getChoice([H|_], Name) when element(1,H) == 'ComponentType',
-              H#'ComponentType'.name == Name ->
+                            H#'ComponentType'.name == Name ->
   H#'ComponentType'.typespec;
 getChoice([_|T], Name) -> getChoice(T, Name).
 
+%% Get tag number
 get_tag([{'CONTEXT', Tag} | _]) -> Tag;
 get_tag(_Other) -> 0.
 
@@ -661,8 +660,10 @@ retrieveASN(Asn) ->
   DB = get_db_ref([Asn#asn.spec#asn_spec.db], Src, []),
   Asn#asn{spec=Asn#asn.spec#asn_spec{db=DB}}.
 
+%% Get directory where ASN.1 data is stored
 asn_dir(Dir, Base, Version, Enc) ->
   [Dir | ["/../asn/" |[Base | [$. |[remove(Version,$.) | [$. |[atom_to_list(Enc)]]]]]]].
+  
 %%
 %% basename of filename, similar to filename:basename,
 %% but remove ALL extension
@@ -734,11 +735,11 @@ get_lines(FN) when is_list(FN) ->
   {ok, Dev} = file:open(FN, [read]),
   get_lines(Dev);
 get_lines(Dev) when is_pid(Dev) ->
-    case io:get_line(Dev, "") of
-    eof  -> 
+  case io:get_line(Dev, "") of
+  eof  -> 
     file:close(Dev), 
     [];
-    Line -> 
+  Line -> 
     [Line | get_lines(Dev)]
-    end.  
+  end.  
                 

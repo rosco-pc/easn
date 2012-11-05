@@ -17,11 +17,10 @@
 %%
 %% %CopyrightEnd%
 %%-------------------------------------------------------------------
-%% File    : easn.erl
-%% Author  : Rob Schmersel <rob@schmersel.net>
-%% Description : GUI for generic asn.1 viewer & editor
-%%
-%%  Still TODO: - Allow editing/re-encoding of decoded data
+%% File         : easn.erl
+%% Author       : Rob Schmersel <rob@schmersel.net>
+%% Description  : GUI for generic asn.1 viewer & editor
+%% Created      : 3 See 2012 - Initial Release
 %%-------------------------------------------------------------------
 
 
@@ -97,7 +96,7 @@ start() ->
   wxFrame:show(Frame),                                        %% Show frame
   %Pid = spawn(easn_parse, start, [self()]),                  %% Start the parser
   %loop(#state{wx=W,parse=Pid,asn=Asn1}),                     %% Handle GUI events
-  loop(#state{wx=W,asn=Asn1}),                                %% Handle GUI events
+  loop(#state{wx=W,asn=Asn1, find=#search{found=[]}}),			%% Handle GUI events
   io:format("Close wx~n",[]),
     wx:destroy().                                             %% Stop wx server.
   %exit(Pid, kill).                                            %% Stop parser
@@ -123,9 +122,8 @@ myframe(Parent, Frame) ->
 attachSTC(Xrc, Parent, Name) ->
   Ref = wxStyledTextCtrl:new(Parent, [{size,{800,500}},
                                       {style, ?wxTE_READONLY}]),
-  wxStyledTextCtrl:styleSetFontAttr(Ref, ?wxSTC_STYLE_DEFAULT, 10, "Consolas",
-                                    false, false, false,
-                                    [{encoding, ?wxFONTENCODING_DEFAULT}]),
+  wxStyledTextCtrl:styleSetFont(Ref, ?wxSTC_STYLE_DEFAULT,
+                                wxFont:new(9, ?wxMODERN, ?wxNORMAL, ?wxNORMAL)),
   wxXmlResource:attachUnknownControl(Xrc, Name, Ref),
   Ref.
 
@@ -184,8 +182,8 @@ loop(State) ->
     wxDialog:destroy(State#state.find#search.dlg),            %% Close search dialog
     F = State#state.find,
     loop(State#state{find=F#search{dlg=undefined}});
-  %#wx{id=Id, obj=Ref, event=#wxTree{type=command_tree_sel_changed}=Ev} ->
-  %  loop(handle_tree(get(Id), Ref, Ev, State));
+  #wx{id=Id, obj=Ref, event=#wxTree{type=command_tree_sel_changed}=Ev} ->
+    loop(handle_tree(get(Id), Ref, Ev, State));
   {show, Count, Offset, Root} ->
     loop(show(State, Count, Offset, Root));
   Ev ->
@@ -455,17 +453,25 @@ handle_cmd(Dialog, Id, State) ->
 
 %handle_tree(comp, _, State) when State#state.load == true ->
 %  State;
-handle_tree(comp, Ref, #wxTree{item=Item, itemOld=Old}, State) when Old /= 0 ->
-  Offset = case wxTreeCtrl:getRootItem(Ref) of
-           Item ->
-             #offset{asn={0,0}, xml={0,0}};
-           _ ->
-             wxTreeCtrl:getItemData(Ref, Item)
-           end,
-  io:format("  Show ~B: ~p~n",[Item, Offset]),
-  showLine(State#state.wx#win.asn, element(1, Offset#offset.asn)),
-  showLine(State#state.wx#win.xml, element(1, Offset#offset.xml)),
-   State;
+handle_tree(comp, Ref, #wxTree{item=Item, itemOld=Old}, State) when Item == 0 ->
+  io:format("  Old Selection: ~B~n",[Old]), 
+  State;
+%% New selection
+handle_tree(comp, Ref, #wxTree{item=Item, itemOld=Old}, State) ->
+	io:format("  Selection: ~B, ~p~n",[Item, wxTreeCtrl:getSelections(Ref)]), 
+	Offset = case wxTreeCtrl:getRootItem(Ref) of
+			 Item -> #offset{asn={0,0}, xml={0,0}};
+			 _ 	  -> wxTreeCtrl:getItemData(Ref, Item)
+			 end,
+	%io:format("  Show ~B: ~p~n",[Item, Offset]),
+	case [X || X <- State#state.find#search.found, X==Item] of
+	[] ->
+		showLine(State#state.wx#win.asn, element(1, Offset#offset.asn)),
+		showLine(State#state.wx#win.xml, element(1, Offset#offset.xml)),
+		State;
+	_ ->
+		State#state{find=State#state.find#search{found=[]}}		%% Reset found list
+	end;
 handle_tree(Id, Ref, Ev, State) ->
   io:format("  Not implemented yet Id : ~p~n  Ev : ~p~n  Ref: ~p~n",[Id, Ev, Ref]),
   State.
@@ -474,22 +480,53 @@ getASN(State) ->
   [ets:delete(T) || T <- State#state.asn#asn.spec#asn_spec.db], %% Delete existing tabs
   Item = wxComboBox:getSelection(State#state.wx#win.choice),    %% get new ASN.1 specification
   Data = wxComboBox:getClientData(State#state.wx#win.choice, Item),
-  Asn = easn_parse:retrieveASN(Data),                           %% retrieve the ASN spec
+  Asn = easn_parse:retrieveASN(Data),							%% retrieve the ASN spec
   Msg = io_lib:format("Change ASN.1 specification to ~s~n",[Asn#asn.title]),
   status(State#state.wx#win.info, Msg),
   State#state{asn=Asn}.
 
 findText(All, State) ->
-  Dlg = State#state.find#search.dlg,
-  T = wxXmlResource:xrcctrl(Dlg, "findText", wxTextCtrl),
-  Text = wxTextCtrl:getValue(T),
-  F1 = getCheck(Dlg, ["findCase", "findWord", "findWrap"], 
-                [?wxSTC_FIND_MATCHCASE, ?wxSTC_FIND_WHOLEWORD, 8], 0),
-  F2 = getRadio(Dlg, ["findMode", "findDir"],
-                [{0, 16, ?wxSTC_FIND_REGEXP}, {0,1}], F1),
-  io:format("~s~n  Flags : ~B~n",[Text, F2]),
-  State#state.find#search{find=Text, flags=F2}.
+	Dlg = State#state.find#search.dlg,
+	T = wxXmlResource:xrcctrl(Dlg, "findText", wxComboBox),
+	Text = wxComboBox:getValue(T),
+	Flags = getCheck(Dlg, ["findRE", "findCase", "findWord", "findWrap"], 
+						  [?wxSTC_FIND_REGEXP, ?wxSTC_FIND_MATCHCASE, 
+						   ?wxSTC_FIND_WHOLEWORD, 8], 0),
+	io:format("~s~n  Flags : ~B~n",[Text, Flags]),
+	{Out, Id}  = case wxNotebook:getSelection(State#state.wx#win.nb) of
+				 1 ->  {State#state.wx#win.xml, "<!-- Part "};
+				 _ ->  {State#state.wx#win.asn, "-- Part "}
+				 end,
+	wxStyledTextCtrl:searchAnchor(Out),
+	case wxStyledTextCtrl:searchNext(Out, Flags, Text) of
+	-1  -> 
+		State;
+	Pos -> 
+		showLine(Out, Pos),										%% Show found selection
+		Part = findPart(Out, Id),								%% get part including found text
+		[{_, _, _, _, Item}] = ets:lookup(decoded, Part),		%% Get item 
+		wxTreeCtrl:selectItem(State#state.wx#win.comp, Item),	%% Select item
+		io:format(" Found ~s in Part ~B~n", [Text, Part]),
+		State#state.find#search{found=[item], find=Text, flags=Flags}
+	end.
   
+findPart(Ref, Id) ->
+  findPart(Ref, Id, wxStyledTextCtrl:getCurrentLine(Ref)-3).
+findPart(Ref, Id, Line) ->
+  Text = wxStyledTextCtrl:getLine(Ref, Line),
+  case lists:prefix(Id, Text) of
+  true -> extractPart(Text, Id);
+  _ ->    findPart(Ref, Id, Line-1)
+  end.
+extractPart(Text, Id) ->
+  Start = length(Id)+1,
+  Len = length(Text)-Start,
+  io:format("  ~s : ~B, ~B~n",[Text, Start, Len]),
+  case lists:suffix(" -->", Text) of
+  true ->  list_to_integer(lists:sublist(Text, Start, Len-4));
+  false -> list_to_integer(lists:sublist(Text, Start, Len))
+  end.
+
 getCheck(Dlg, [CH|CT], [FH|FT], Flags) ->
   CB = wxXmlResource:xrcctrl(Dlg, CH, wxCheckBox),
   F = Flags bor case wxCheckBox:getValue(CB) of
@@ -519,23 +556,23 @@ scan_asn([], _, Res) -> Res;
 scan_asn([H|T], Dir, Res) ->
   FN = Dir ++  [$/|H],
   case filelib:is_dir(FN) of
-  true ->                                                        %% Get spec
+  true ->                                                       %% Get spec
     Base = easn_parse:basename(H),
     case file:consult(filename:join(FN, Base++".cfg")) of
     {error, _} ->    scan_asn(T, Dir, Res);
     {ok, [Asn|_]} ->  scan_asn(T, Dir, [Asn|Res])
     end;
   false ->
-    scan_asn(T, Dir, Res)                                        %% Continue
+    scan_asn(T, Dir, Res)                                       %% Continue
   end.
 
 get_config() ->
   Dir = filename:dirname(code:which(?MODULE)),                  %% get directory
   case file:consult(filename:join([Dir, "..", "easn.cfg"])) of  %% Read config file
-  {error, _} ->                                                  %% Nay, an error
+  {error, _} ->                                                 %% Nay, an error
     io:format("Error reading config file ~s~n",[filename:join([Dir, "..", "easn.cfg"])]),
     #config{files=[]};
-  {ok, [C|_]} ->  C                                              %% Yeah, it was correct
+  {ok, [C|_]} ->  C                                             %% Yeah, it was correct
   end.
 
 show(State) ->
@@ -550,25 +587,26 @@ show(State) ->
   %io:format("~n~s~n",[filename:basename(State#state.file)]),
   Root = wxTreeCtrl:addRoot(State#state.wx#win.comp,
                             filename:basename(State#state.file), []),
-  wxTreeCtrl:expand(State#state.wx#win.comp, Root),           %% Seems to be needed!
-  showHex(Data, Size, 0, State),                              %% Show Hex data
+  wxTreeCtrl:expand(State#state.wx#win.comp, Root),             %% Seems to be needed!
+  showHex(Data, Size, 0, State),                                %% Show Hex data
   self() ! {show, 1, 32768, Root},
   State.
 show(State, Count, Hex, Root) ->
   case ets:lookup(decoded, Count) of
-  [] ->                                                       %% Last record
+  [] ->                                                         %% Last record
     Msg = io_lib:format("Decoded ~B parts~n",[Count-1]),
     status(State#state.wx#win.info, Msg),
     State;
-  [{_, {error, Reason}}] ->                                   %% Error
+  [{_, {error, Reason}}] ->                                     %% Error
     Msg = io_lib:format("Decoded ~B parts~nError: ~p~n",[Count-1,Reason]),
     status(State#state.wx#win.info, Msg),
     State;
-  [{_, Offset, Tag, Rec}] ->                                  %% Decoded information
-    Hex1 = if element(1, Offset#offset.hex) >= Hex ->         %% Display more Hex data?
-             io:format("Add more hex data",[]),
+  [{_, Offset, Tag, Rec, _}] ->                                 %% Decoded information
+    %io:format("  Offset: ~B, ~p~n",[Hex, Offset]),
+    Hex1 = if element(1, Offset) >= Hex ->                      %% Display more Hex data?
              [{_,{Size, Data}}] = ets:lookup(decoded, 0),
-             showHex(Data, Size, Hex, State),
+             showHex(Data, 
+Size, Hex, State),
              Hex + 32768;
            true ->
              Hex
@@ -590,7 +628,7 @@ show(State, Count, Hex, Root) ->
                                                  hex=Offset,
                                                  asn=Off_asn,
                                                  xml=Off_xml}}]),
-    io:format("  Item: ~B  ~p~n",[Item, #offset{count=Count,hex=Offset,asn=Off_asn,xml=Off_xml}]),
+    ets:insert(decoded, {Count, Offset, Tag, Rec, Item}),
     case Count of
     1 -> wxTreeCtrl:selectItem(State#state.wx#win.comp, Item);
     _ -> ignore
@@ -605,13 +643,13 @@ insert(Out, Msg) ->
   Stop = wxStyledTextCtrl:getLength(Out),
   {Start, Stop}.
 
-showLine(Ctrl, Pos) ->
-  L = wxStyledTextCtrl:lineFromPosition(Ctrl, Pos),
-  wxStyledTextCtrl:gotoLine(Ctrl, L),
-  case wxStyledTextCtrl:getFirstVisibleLine(Ctrl) of
-  L -> ignore;
-  V -> wxStyledTextCtrl:gotoLine(Ctrl, L+(L-V))
-  end.
+showLine(Ref, Pos) ->
+  L = wxStyledTextCtrl:lineFromPosition(Ref, Pos),
+  wxStyledTextCtrl:scrollToLine(Ref, L).
+  %$case wxStyledTextCtrl:getFirstVisibleLine(Ref) of
+  %L -> ignore;
+  %V -> wxStyledTextCtrl:scrollToLine(Ref, L+(L-V))
+  %end.
 
 showHex(Data, Size, Start, State) when Start < Size ->
   O = Size - Start,
@@ -621,7 +659,7 @@ showHex(Data, Size, Start, State) when Start < Size ->
         end,
   <<_H:Start/binary, P:End/binary, _T/binary>> = Data,
   wxTextCtrl:appendText(State#state.wx#win.hex,
-                        easn_parse:to_hex(P, 0, []));
+                        easn_parse:to_hex(P, Start, []));
 
 showHex(_,_,_,_) ->
   ok.

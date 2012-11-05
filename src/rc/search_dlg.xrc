@@ -13,33 +13,78 @@
                     <object class="sizeritem">
                       <object class="wxStaticText">
                         <label>Find what:</label>
+                        <font>
+                          <size>9</size>
+                          <style>normal</style>
+                          <weight>normal</weight>
+                          <underlined>0</underlined>
+                          <family>swiss</family>
+                          <face>Sans</face>
+                          <encoding>UTF-8</encoding>
+                        </font>
                         <style>wxALIGN_RIGHT</style>
                       </object>
                       <option>1</option>
-                      <flag>wxALL|wxEXPAND|wxSTRETCH_NOT|wxALIGN_CENTRE_VERTICAL</flag>
+                      <flag>wxALL|wxSTRETCH_NOT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
                       <border>5</border>
                       <cellpos>0,0</cellpos>
                     </object>
                     <object class="sizeritem">
-                      <object class="wxComboBox" name="findText">
-                        <size>180,-1</size>
-                        <style>wxCB_DROPDOWN|wxCB_SORT</style>
-                      </object>
+                      <object class="wxComboBox" name="findText"/>
                       <option>1</option>
                       <flag>wxALL|wxEXPAND</flag>
                       <border>5</border>
                       <cellpos>0,1</cellpos>
-                      <cellspan>1,2</cellspan>
+                      <cellspan>1,4</cellspan>
+                    </object>
+                    <object class="sizeritem">
+                      <object class="wxStaticText">
+                        <size>87,25</size>
+                      </object>
+                      <option>1</option>
+                      <flag>wxALL|wxEXPAND</flag>
+                      <border>5</border>
+                      <cellpos>1,0</cellpos>
+                      <cellspan>1,1</cellspan>
+                    </object>
+                    <object class="sizeritem">
+                      <object class="wxStaticText">
+                        <size>-1,25</size>
+                      </object>
+                      <option>1</option>
+                      <flag>wxALL|wxEXPAND</flag>
+                      <border>5</border>
+                      <cellpos>1,0</cellpos>
+                      <cellspan>1,5</cellspan>
+                    </object>
+                    <object class="sizeritem">
+                      <object class="wxCheckBox" name="findRE">
+                        <label>Use Regular Expression</label>
+                        <tooltip>Use a POSIX  regular expression</tooltip>
+                      </object>
+                      <option>1</option>
+                      <flag>wxRIGHT|wxEXPAND</flag>
+                      <border>50</border>
+                      <cellpos>2,0</cellpos>
+                      <cellspan>1,3</cellspan>
+                    </object>
+                    <object class="sizeritem">
+                      <object class="wxCheckBox" name="findSeq">
+                        <label>Use Escape sequence</label>
+                        <tooltip>Replace \\, \n, ... adn \xxx with the corresponding control character</tooltip>
+                      </object>
+                      <cellpos>3,0</cellpos>
+                      <cellspan>1,3</cellspan>
                     </object>
                     <object class="sizeritem">
                       <object class="wxCheckBox" name="findWord">
                         <label>Match whole word</label>
                       </object>
                       <option>1</option>
-                      <flag>wxALL|wxEXPAND</flag>
-                      <border>5</border>
-                      <cellpos>3,0</cellpos>
-                      <cellspan>1,3</cellspan>
+                      <flag>wxRIGHT</flag>
+                      <border>30</border>
+                      <cellpos>2,3</cellpos>
+                      <cellspan>1,2</cellspan>
                     </object>
                     <object class="sizeritem">
                       <object class="wxCheckBox" name="findCase">
@@ -47,9 +92,9 @@
                       </object>
                       <option>1</option>
                       <flag>wxALL|wxEXPAND</flag>
-                      <border>5</border>
-                      <cellpos>4,0</cellpos>
-                      <cellspan>1,3</cellspan>
+                      <border>0</border>
+                      <cellpos>3,3</cellpos>
+                      <cellspan>1,2</cellspan>
                     </object>
                     <object class="sizeritem">
                       <object class="wxCheckBox" name="findWrap">
@@ -57,43 +102,9 @@
                       </object>
                       <option>1</option>
                       <flag>wxALL|wxEXPAND</flag>
-                      <border>5</border>
-                      <cellpos>5,0</cellpos>
-                      <cellspan>1,3</cellspan>
-                    </object>
-                    <object class="sizeritem">
-                      <object class="wxRadioBox" name="findMode">
-                        <label>Search mode</label>
-                        <dimension>3</dimension>
-                        <content>
-                          <item>Normal</item>
-                          <item tooltip="Replace special characters">Extended (\n,\r, \t, ...)</item>
-                          <item helptext=".  Matches any character \(  This marks the start of a region for tagging a match. \)  This marks the end of a tagged region. \n  Where n is 1 through 9 refers to the first through ninth tagged region when replacing. For example if the search string was Fred\([1-9]\)XXX and the replace string was Sam\1YYY applied to Fred2XXX this would generate Sam2YYY. \&lt;  This matches the start of a word using Scintilla's definitions of words. \&gt;  This matches the end of a word using Scintilla's definition of words. \x  " tooltip="Use text as regular expression">Regular expression</item>
-                        </content>
-                        <selection>0</selection>
-                        <dimension>3</dimension>
-                        <style>wxRA_VERTICAL</style>
-                      </object>
-                      <option>1</option>
-                      <flag>wxALL|wxEXPAND</flag>
-                      <border>5</border>
-                      <cellpos>6,0</cellpos>
+                      <border>0</border>
+                      <cellpos>4,3</cellpos>
                       <cellspan>1,2</cellspan>
-                    </object>
-                    <object class="sizeritem">
-                      <object class="wxRadioBox" name="findDir">
-                        <label>Direction</label>
-                        <content>
-                          <item>Up</item>
-                          <item>Down</item>
-                        </content>
-                        <selection>1</selection>
-                        <style>wxRA_HORIZONTAL</style>
-                      </object>
-                      <option>1</option>
-                      <flag>wxALL</flag>
-                      <border>5</border>
-                      <cellpos>6,2</cellpos>
                     </object>
                   </object>
                   <option>1</option>
@@ -106,6 +117,15 @@
                       <object class="wxButton" name="wxID_OK">
                         <label>Find</label>
                         <default>1</default>
+                        <font>
+                          <size>9</size>
+                          <style>normal</style>
+                          <weight>normal</weight>
+                          <underlined>0</underlined>
+                          <family>swiss</family>
+                          <face>Sans</face>
+                          <encoding>UTF-8</encoding>
+                        </font>
                         <tooltip>Find and select part where text is found</tooltip>
                       </object>
                       <option>1</option>
@@ -115,6 +135,15 @@
                     <object class="sizeritem">
                       <object class="wxButton" name="findAll">
                         <label>Find All</label>
+                        <font>
+                          <size>9</size>
+                          <style>normal</style>
+                          <weight>normal</weight>
+                          <underlined>0</underlined>
+                          <family>swiss</family>
+                          <face>Sans</face>
+                          <encoding>UTF-8</encoding>
+                        </font>
                         <tooltip>Find &amp; select all parts where text is found</tooltip>
                       </object>
                       <option>1</option>
@@ -122,20 +151,30 @@
                       <border>5</border>
                     </object>
                     <object class="sizeritem">
-                      <object class="wxButton" name="wxID_CANCEL"/>
+                      <object class="wxButton" name="wxID_CANCEL">
+                        <font>
+                          <size>9</size>
+                          <style>normal</style>
+                          <weight>normal</weight>
+                          <underlined>0</underlined>
+                          <family>swiss</family>
+                          <face>Sans</face>
+                          <encoding>UTF-8</encoding>
+                        </font>
+                      </object>
                       <option>1</option>
                       <flag>wxALL</flag>
                       <border>5</border>
                     </object>
-                    <cols>1</cols>
-                    <rows>3</rows>
+                    <cols>3</cols>
+                    <rows>1</rows>
                   </object>
                   <option>1</option>
-                  <flag>wxALL|wxEXPAND|wxADJUST_MINSIZE</flag>
-                  <border>5</border>
+                  <flag>wxALL|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                  <border>1</border>
                 </object>
-                <cols>2</cols>
-                <rows>1</rows>
+                <cols>1</cols>
+                <rows>2</rows>
               </object>
             </object>
             <label>Find</label>
@@ -151,114 +190,114 @@
                         <style>wxALIGN_RIGHT</style>
                       </object>
                       <option>1</option>
-                      <flag>wxALL|wxEXPAND|wxSTRETCH_NOT|wxALIGN_CENTRE_VERTICAL</flag>
+                      <flag>wxALL|wxSTRETCH_NOT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
                       <border>5</border>
                       <cellpos>0,0</cellpos>
                     </object>
                     <object class="sizeritem">
-                      <object class="wxComboBox" name="rFindText">
-                        <size>180,-1</size>
-                        <style>wxCB_DROPDOWN</style>
-                      </object>
+                      <object class="wxComboBox" name="rFindText"/>
                       <option>1</option>
                       <flag>wxALL|wxEXPAND</flag>
                       <border>5</border>
                       <cellpos>0,1</cellpos>
-                      <cellspan>1,2</cellspan>
+                      <cellspan>1,5</cellspan>
                     </object>
                     <object class="sizeritem">
                       <object class="wxStaticText">
                         <label>Replace with: </label>
                       </object>
                       <option>1</option>
-                      <flag>wxALL|wxSTRETCH_NOT|wxALIGN_CENTRE_VERTICAL</flag>
+                      <flag>wxALL|wxSTRETCH_NOT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
                       <border>5</border>
                       <cellpos>1,0</cellpos>
                     </object>
                     <object class="sizeritem">
-                      <object class="wxComboBox" name="replText">
-                        <style>wxCB_DROPDOWN</style>
-                      </object>
+                      <object class="wxComboBox" name="replText"/>
                       <option>1</option>
                       <flag>wxALL|wxEXPAND</flag>
                       <border>5</border>
                       <cellpos>1,1</cellpos>
-                      <cellspan>1,2</cellspan>
+                      <cellspan>1,5</cellspan>
+                    </object>
+                    <object class="sizeritem">
+                      <object class="wxCheckBox" name="replRE">
+                        <label>Use Regular Expression</label>
+                        <tooltip>Use a POSIX  regular expression</tooltip>
+                      </object>
+                      <option>1</option>
+                      <flag>wxRIGHT</flag>
+                      <border>50</border>
+                      <cellpos>2,0</cellpos>
+                      <cellspan>1,3</cellspan>
+                    </object>
+                    <object class="sizeritem">
+                      <object class="wxCheckBox" name="replSeq">
+                        <label>Use Escape sequence</label>
+                        <tooltip>Replace \\, \n, ... adn \xxx with the corresponding control character</tooltip>
+                      </object>
+                      <option>1</option>
+                      <flag>wxRIGHT</flag>
+                      <border>30</border>
+                      <cellpos>3,0</cellpos>
+                      <cellspan>1,3</cellspan>
                     </object>
                     <object class="sizeritem">
                       <object class="wxCheckBox" name="replWord">
                         <label>Match whole word</label>
                       </object>
                       <option>1</option>
-                      <flag>wxALL|wxEXPAND</flag>
-                      <border>5</border>
-                      <cellpos>3,0</cellpos>
-                      <cellspan>1,3</cellspan>
+                      <flag>wxRIGHT|wxEXPAND</flag>
+                      <border>30</border>
+                      <cellpos>2,3</cellpos>
+                      <cellspan>1,2</cellspan>
                     </object>
                     <object class="sizeritem">
                       <object class="wxCheckBox" name="replCase">
                         <label>Match case</label>
                       </object>
                       <option>1</option>
-                      <flag>wxALL|wxEXPAND</flag>
-                      <border>5</border>
-                      <cellpos>4,0</cellpos>
-                      <cellspan>1,3</cellspan>
+                      <flag>wxRIGHT|wxEXPAND</flag>
+                      <border>20</border>
+                      <cellpos>3,3</cellpos>
+                      <cellspan>1,2</cellspan>
                     </object>
                     <object class="sizeritem">
                       <object class="wxCheckBox" name="replWrap">
                         <label>Wrap around</label>
                       </object>
                       <option>1</option>
-                      <flag>wxALL|wxEXPAND</flag>
-                      <border>5</border>
-                      <cellpos>5,0</cellpos>
-                      <cellspan>1,3</cellspan>
-                    </object>
-                    <object class="sizeritem">
-                      <object class="wxRadioBox" name="replMode">
-                        <label>Search mode</label>
-                        <dimension>3</dimension>
-                        <content>
-                          <item>Normal</item>
-                          <item tooltip="Replace special characters">Extended (\n,\r, \t, ...)</item>
-                          <item helptext=".  Matches any character \(  This marks the start of a region for tagging a match. \)  This marks the end of a tagged region. \n  Where n is 1 through 9 refers to the first through ninth tagged region when replacing. For example if the search string was Fred\([1-9]\)XXX and the replace string was Sam\1YYY applied to Fred2XXX this would generate Sam2YYY. \&lt;  This matches the start of a word using Scintilla's definitions of words. \&gt;  This matches the end of a word using Scintilla's definition of words. \x  " tooltip="Use text as regular expression">Regular expression</item>
-                        </content>
-                        <selection>0</selection>
-                        <dimension>3</dimension>
-                        <style>wxRA_VERTICAL</style>
-                      </object>
-                      <option>1</option>
-                      <flag>wxALL|wxEXPAND</flag>
-                      <border>5</border>
-                      <cellpos>6,0</cellpos>
+                      <flag>wxRIGHT|wxEXPAND</flag>
+                      <border>20</border>
+                      <cellpos>4,3</cellpos>
                       <cellspan>1,2</cellspan>
                     </object>
-                    <object class="sizeritem">
-                      <object class="wxRadioBox" name="replDir">
-                        <label>Direction</label>
-                        <content>
-                          <item>Up</item>
-                          <item>Down</item>
-                        </content>
-                        <selection>1</selection>
-                        <style>wxRA_HORIZONTAL</style>
-                      </object>
-                      <option>1</option>
-                      <flag>wxALL</flag>
-                      <border>5</border>
-                      <cellpos>6,2</cellpos>
-                    </object>
+                    <hgap>0</hgap>
                   </object>
                   <option>1</option>
-                  <flag>wxALL|wxEXPAND|wxADJUST_MINSIZE</flag>
+                  <flag>wxALL|wxEXPAND</flag>
                   <border>5</border>
                 </object>
                 <object class="sizeritem">
                   <object class="wxFlexGridSizer">
                     <object class="sizeritem">
-                      <object class="wxButton" name="wxID_OK">
+                      <object class="wxButton" name="find">
+                        <label>Find</label>
+                      </object>
+                      <option>1</option>
+                      <flag>wxALL|wxEXPAND</flag>
+                      <border>5</border>
+                    </object>
+                    <object class="sizeritem">
+                      <object class="wxButton" name="replace">
                         <label>Replace</label>
+                      </object>
+                      <option>1</option>
+                      <flag>wxALL|wxEXPAND</flag>
+                      <border>5</border>
+                    </object>
+                    <object class="sizeritem">
+                      <object class="wxButton" name="wxID_OK">
+                        <label>Find &amp; Replace</label>
                         <default>1</default>
                         <tooltip>Find and select part where text is found</tooltip>
                       </object>
@@ -281,20 +320,29 @@
                       <flag>wxALL</flag>
                       <border>5</border>
                     </object>
-                    <cols>1</cols>
-                    <rows>3</rows>
+                    <cols>5</cols>
+                    <rows>1</rows>
                   </object>
                   <option>1</option>
-                  <flag>wxALL|wxEXPAND|wxADJUST_MINSIZE</flag>
-                  <border>5</border>
+                  <flag>wxALL|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                  <border>1</border>
                 </object>
-                <cols>2</cols>
-                <rows>1</rows>
+                <cols>1</cols>
+                <rows>2</rows>
               </object>
+              <enabled>0</enabled>
             </object>
             <label>Replace</label>
           </object>
-          <style>wxBK_TOP</style>
+          <font>
+            <size>9</size>
+            <style>normal</style>
+            <weight>normal</weight>
+            <underlined>0</underlined>
+            <family>swiss</family>
+            <face>Sans</face>
+            <encoding>UTF-8</encoding>
+          </font>
         </object>
         <option>1</option>
         <flag>wxALL|wxEXPAND</flag>
@@ -302,6 +350,15 @@
       </object>
     </object>
     <title>Find</title>
+    <font>
+      <size>9</size>
+      <style>normal</style>
+      <weight>normal</weight>
+      <underlined>0</underlined>
+      <family>swiss</family>
+      <face>Sans</face>
+      <encoding>UTF-8</encoding>
+    </font>
     <style>wxDEFAULT_DIALOG_STYLE</style>
   </object>
 </resource>
